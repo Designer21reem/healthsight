@@ -7,14 +7,14 @@ import Footer from '../Footer';
 export default function ConditionalHeaderFooter({ children }) {
   const pathname = usePathname();
 
-  // Hide header/footer for admin routes
-  const isAdmin = pathname && pathname.startsWith('/admin');
+  // Show header/footer on landing and articles pages
+  const showHeaderFooter = pathname === '/' || pathname === '' || pathname == null || pathname.startsWith('/articles');
 
   return (
     <>
-      {!isAdmin && <Header />}
+      {showHeaderFooter && <Header />}
       {children}
-      {!isAdmin && <Footer />}
+      {showHeaderFooter && <Footer />}
     </>
   );
 }
