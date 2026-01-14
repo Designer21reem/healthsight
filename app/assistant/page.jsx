@@ -9,23 +9,23 @@ import { supabase } from "../../lib/supabaseClient";
 export default function AssistantPage() {
   const router = useRouter();
 
-  // ✅ Auth/Profile
+  // Auth/Profile
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
 
-  // ✅ UI
+  // UI
   const [loading, setLoading] = useState(true);
-  // ✅ لودر خاص للوك اوت
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  // Chat state
+  // Chat
   const [text, setText] = useState("");
   const [messages, setMessages] = useState([]);
   const [showChat, setShowChat] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
-  const [chatHistory, setChatHistory] = useState([]);
+  const [chatHistory, setChatHistory] = useState([]); // sessions
   const [isSending, setIsSending] = useState(false);
-  const [currentChatId, setCurrentChatId] = useState(null);
+  const [currentChatId, setCurrentChatId] = useState(null); // session uuid
+
   const messagesEndRef = useRef(null);
 
   const agents = [
@@ -35,7 +35,7 @@ export default function AssistantPage() {
     { id: "psychiatrist", name: "Psychiatrist", emoji: "🧠" },
   ];
 
-  // ✅ Loading Overlay (نفس ستايل اليوزر) + يدعم لوك اوت
+  // Loading overlay
   const LoadingOverlay = () => (
     <AnimatePresence>
       {(loading || logoutLoading) && (
@@ -58,7 +58,9 @@ export default function AssistantPage() {
                 {logoutLoading ? "Signing you out" : "Preparing your assistant"}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                {logoutLoading ? "Please wait a moment..." : "Loading your profile..."}
+                {logoutLoading
+                  ? "Please wait a moment..."
+                  : "Loading your profile..."}
               </div>
             </div>
           </motion.div>
@@ -67,7 +69,7 @@ export default function AssistantPage() {
     </AnimatePresence>
   );
 
-  // ✅ Init (جلسة + بروفايل)
+  // init
   useEffect(() => {
     initializeAssistant();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,13 +99,7 @@ export default function AssistantPage() {
 
       setProfile(profileData || null);
 
-      // Load history
-      const saved = localStorage.getItem("chatHistory");
-      if (saved) {
-        try {
-          setChatHistory(JSON.parse(saved));
-        } catch {}
-      }
+      await fetchChatSessions();
 
       setLoading(false);
     } catch (e) {
@@ -112,19 +108,80 @@ export default function AssistantPage() {
     }
   }
 
-  // Save history
+  // auto scroll
   useEffect(() => {
-    localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
-  }, [chatHistory]);
-
-  // Auto scroll
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ✅ Logout + لودر
+  // fetch sessions (archive)
+  async function fetchChatSessions() {
+    const { data, error } = await supabase
+      .from("ai_chat_sessions")
+      .select("id, title, created_at, updated_at")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      console.error("fetchChatSessions error:", error);
+      return;
+    }
+
+    setChatHistory(data || []);
+  }
+
+  // create new session
+  async function createNewChatSession(firstUserText = "") {
+    if (!user?.id) return null;
+
+    const title =
+      firstUserText.trim().length > 0
+        ? firstUserText.trim().split(/\s+/).slice(0, 6).join(" ")
+        : "New chat";
+
+    const { data, error } = await supabase
+      .from("ai_chat_sessions")
+      .insert([{ user_id: user.id, title }])
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("createNewChatSession error:", error);
+      return null;
+    }
+
+    await fetchChatSessions();
+    return data?.id || null;
+  }
+
+  // touch session updated_at
+  async function touchSession(sessionId) {
+    if (!sessionId) return;
+    const { error } = await supabase
+      .from("ai_chat_sessions")
+      .update({})
+      .eq("id", sessionId);
+    if (error) console.error("touchSession error:", error);
+  }
+
+  // save message
+  async function saveMessageToDb(sessionId, msg) {
+    if (!user?.id || !sessionId) return;
+
+    const row = {
+      session_id: sessionId,
+      user_id: user.id,
+      sender: msg.sender,
+      text: msg.text,
+      agent_id: msg.agentId || null,
+      agent_name: msg.agentName || null,
+      emoji: msg.emoji || null,
+      color: msg.color || null,
+    };
+
+    const { error } = await supabase.from("ai_chat_messages").insert([row]);
+    if (error) console.error("saveMessageToDb error:", error);
+  }
+
+  // logout
   const handleLogout = async () => {
     if (logoutLoading) return;
     setLogoutLoading(true);
@@ -135,126 +192,76 @@ export default function AssistantPage() {
       console.error("Logout error:", e);
     } finally {
       router.push("/");
-      // ما نطفي اللودر لأن الصفحة راح تتغير
     }
   };
 
-  const deleteChat = (chatId) => {
-    setChatHistory((prev) => prev.filter((c) => c.id !== chatId));
-    if (currentChatId === chatId) {
-      setMessages([]);
-      setShowChat(false);
-      setText("");
-      setCurrentChatId(null);
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!text.trim() || isSending) return;
-
-    setIsSending(true);
-    const originalText = text;
-
-    const userMessage = {
-      id: Date.now(),
-      text: originalText,
-      sender: "user",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      date: new Date().toISOString(),
-    };
-
-    let chatId = currentChatId;
-    if (!chatId) {
-      chatId = Date.now();
-      setCurrentChatId(chatId);
-
-      const title = originalText.trim().split(/\s+/).slice(0, 6).join(" ");
-      const newSession = {
-        id: chatId,
-        date: new Date().toISOString(),
-        userMessage: title,
-        messages: [],
-      };
-
-      setChatHistory((prev) => [newSession, ...prev]);
-    }
-
-    setMessages((prev) => [...prev, userMessage]);
-    setText("");
-    setShowChat(true);
-
-    setChatHistory((prev) =>
-      prev.map((chat) =>
-        chat.id === chatId ? { ...chat, messages: [...chat.messages, userMessage] } : chat
-      )
-    );
-
+  // delete chat
+  const deleteChat = async (chatId) => {
     try {
-      const res = await fetch("/api/symptoms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: originalText }),
-      });
+      const { error } = await supabase
+        .from("ai_chat_sessions")
+        .delete()
+        .eq("id", chatId);
+      if (error) throw error;
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || "API error");
+      if (currentChatId === chatId) {
+        setMessages([]);
+        setShowChat(false);
+        setText("");
+        setCurrentChatId(null);
       }
 
-      const data = await res.json();
-      const agentMessages = (data.replies || []).map((r, i) => ({
-        id: Date.now() + i + 1,
-        text: r.text,
-        sender: "agent",
-        agentName: r.name,
-        emoji: r.emoji,
-        color: r.color,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        date: new Date().toISOString(),
-      }));
-
-      agentMessages.forEach((msg, idx) => {
-        setTimeout(() => {
-          setMessages((prev) => [...prev, msg]);
-
-          setChatHistory((prev) =>
-            prev.map((chat) =>
-              chat.id === chatId ? { ...chat, messages: [...chat.messages, msg] } : chat
-            )
-          );
-
-          if (idx === agentMessages.length - 1) setIsSending(false);
-        }, (idx + 1) * 1200);
-      });
+      await fetchChatSessions();
     } catch (e) {
-      const errorMsg = {
-        id: Date.now() + 999,
-        text: "صار خطأ بالاتصال بالباك اند. تأكد من /api/symptoms وجرّب مرة ثانية.",
-        sender: "agent",
-        agentName: "System",
-        emoji: "⚠️",
-        color: "text-gray-600",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        date: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, errorMsg]);
-      setChatHistory((prev) =>
-        prev.map((chat) =>
-          chat.id === chatId ? { ...chat, messages: [...chat.messages, errorMsg] } : chat
-        )
-      );
-      setIsSending(false);
+      console.error("deleteChat error:", e);
     }
   };
 
-  const loadChatFromHistory = (chat) => {
-    setMessages(chat.messages);
-    setShowChat(true);
-    setShowArchive(false);
-    setCurrentChatId(chat.id);
+  // load chat
+  const loadChatFromHistory = async (chat) => {
+    try {
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("ai_chat_messages")
+        .select("*")
+        .eq("session_id", chat.id)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("loadChatFromHistory error:", error);
+        setLoading(false);
+        return;
+      }
+
+      const mapped = (data || []).map((m) => ({
+        id: m.id,
+        text: m.text,
+        sender: m.sender,
+        agentName: m.agent_name || undefined,
+        agentId: m.agent_id || undefined,
+        emoji: m.emoji || undefined,
+        color: m.color || undefined,
+        time: new Date(m.created_at).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        date: m.created_at,
+      }));
+
+      setMessages(mapped);
+      setShowChat(true);
+      setShowArchive(false);
+      setCurrentChatId(chat.id);
+
+      setLoading(false);
+    } catch (e) {
+      console.error("loadChatFromHistory unexpected:", e);
+      setLoading(false);
+    }
   };
 
+  // new chat (UI only)
   const startNewChat = () => {
     setMessages([]);
     setShowChat(false);
@@ -272,7 +279,7 @@ export default function AssistantPage() {
     });
   };
 
-  // ✅ initials for avatar fallback
+  // initials
   const initials =
     profile?.full_name
       ?.split(" ")
@@ -281,11 +288,120 @@ export default function AssistantPage() {
       .toUpperCase()
       .slice(0, 2) || "U";
 
+  // send message
+  const sendMessage = async () => {
+    if (!text.trim() || isSending) return;
+
+    setIsSending(true);
+    const originalText = text;
+
+    const userMessage = {
+      id: `local-${Date.now()}`,
+      text: originalText,
+      sender: "user",
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      date: new Date().toISOString(),
+    };
+
+    let sessionId = currentChatId;
+
+    if (!sessionId) {
+      sessionId = await createNewChatSession(originalText);
+      setCurrentChatId(sessionId);
+    }
+
+    setMessages((prev) => [...prev, userMessage]);
+    setText("");
+    setShowChat(true);
+
+    if (sessionId) {
+      await saveMessageToDb(sessionId, userMessage);
+      await touchSession(sessionId);
+      await fetchChatSessions();
+    }
+
+    try {
+      const res = await fetch("/api/symptoms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: originalText }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "API error");
+      }
+
+      const data = await res.json();
+
+      const agentMessages = (data.replies || []).map((r, i) => ({
+        id: `agent-local-${Date.now()}-${i}`,
+        text: r.text,
+        sender: "agent",
+        agentName: r.name,
+        agentId: r.id || null,
+        emoji: r.emoji,
+        color: r.color,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        date: new Date().toISOString(),
+      }));
+
+      for (let i = 0; i < agentMessages.length; i++) {
+        const msg = agentMessages[i];
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, (i + 1) * 350));
+
+        setMessages((prev) => [...prev, msg]);
+
+        if (sessionId) {
+          // eslint-disable-next-line no-await-in-loop
+          await saveMessageToDb(sessionId, msg);
+          // eslint-disable-next-line no-await-in-loop
+          await touchSession(sessionId);
+        }
+      }
+
+      if (sessionId) await fetchChatSessions();
+      setIsSending(false);
+    } catch (e) {
+      const errorMsg = {
+        id: `err-${Date.now()}`,
+        text: "صار خطأ بالاتصال بالباك اند. تأكد من /api/symptoms وجرّب مرة ثانية.",
+        sender: "agent",
+        agentName: "System",
+        emoji: "⚠️",
+        color: "text-gray-600",
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        date: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, errorMsg]);
+
+      if (sessionId) {
+        await saveMessageToDb(sessionId, errorMsg);
+        await touchSession(sessionId);
+        await fetchChatSessions();
+      }
+
+      setIsSending(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-white text-slate-900 antialiased">
+    // ✅ 1) منع سكرول الصفحة الرئيسي نهائياً
+    <div className="h-screen overflow-hidden bg-white text-slate-900 antialiased">
       <LoadingOverlay />
 
-      {/* ✅ Header (نفس مال UserPage: responsive mobile) */}
+      {/* Header */}
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
@@ -294,7 +410,6 @@ export default function AssistantPage() {
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-2 py-3 sm:h-20 sm:py-0">
-            {/* Brand -> يرجع لليوزر بيج */}
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -316,7 +431,6 @@ export default function AssistantPage() {
               transition={{ delay: 0.3 }}
               className="flex items-center gap-2 sm:gap-4"
             >
-              {/* Profile (✅ مربوط بجدول profiles) */}
               <div className="flex items-center gap-2 pr-2 sm:pr-4 sm:border-r sm:border-gray-100">
                 {profile?.avatar_url ? (
                   <motion.img
@@ -344,18 +458,6 @@ export default function AssistantPage() {
                 </div>
               </div>
 
-              {/* زر رجوع للداشبورد (اختياري) */}
-              <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => router.push("/user")}
-                className="hidden sm:flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 transition-colors px-3 py-2 text-sm font-medium text-indigo-700"
-                title="Back"
-              >
-                Back
-              </motion.button>
-
-              {/* Logout + Disable اثناء اللودر */}
               <motion.button
                 whileHover={{ scale: logoutLoading ? 1 : 1.03 }}
                 whileTap={{ scale: logoutLoading ? 1 : 0.97 }}
@@ -377,17 +479,18 @@ export default function AssistantPage() {
         </div>
       </motion.header>
 
-      {/* Main */}
-      <main className="flex-1 flex flex-col min-h-[calc(100vh-80px)]">
+      {/* ✅ 2) خلي الـ main ياخذ باقي الشاشة بدون ما يسبب سكرول للصفحة */}
+      <main className="flex flex-col h-[calc(100vh-80px)]">
         <AnimatePresence mode="wait">
           {!showChat ? (
-            // Initial screen
+            // ✅ 3) هنا هم لازم تمنعين سكرول الصفحة: خلي المحتوى داخل main وما يطلع برا
             <motion.div
               key="initial"
               initial={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="max-w-3xl w-full mx-auto text-center py-16 px-6"
+              className="max-w-3xl w-full mx-auto text-center py-16 px-6 overflow-hidden"
             >
+              {/* (باقي initial نفس ما هو) */}
               <motion.img
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{
@@ -412,12 +515,7 @@ export default function AssistantPage() {
                 }}
               />
 
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-3xl md:text-4xl font-extrabold mb-2"
-              >
+              <motion.h1 className="text-3xl md:text-4xl font-extrabold mb-2">
                 Hi there,
                 <span className="text-purple-600">
                   {" "}
@@ -425,25 +523,15 @@ export default function AssistantPage() {
                 </span>
               </motion.h1>
 
-              <motion.h2
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="text-2xl md:text-3xl font-semibold mb-3"
-              >
-                How are <span className="text-purple-600">you feeling</span> today ?
+              <motion.h2 className="text-2xl md:text-3xl font-semibold mb-3">
+                How are <span className="text-purple-600">you feeling</span>{" "}
+                today ?
               </motion.h2>
 
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="text-sm text-gray-500 mb-6"
-              >
+              <motion.p className="text-sm text-gray-500 mb-6">
                 Tell me about your symptoms, and I&apos;ll try to help
               </motion.p>
 
-              {/* badges */}
               <div className="flex flex-wrap gap-3 justify-center mb-8">
                 {agents.map((a) => (
                   <div
@@ -456,72 +544,73 @@ export default function AssistantPage() {
                 ))}
               </div>
 
-              {/* input */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-                className="mt-6"
-              >
-                <div className="flex items-center gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowArchive(true)}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors"
-                    aria-label="Chat history"
-                    title="Chat History"
-                  >
-                    <Archive className="w-5 h-5 text-indigo-500" />
-                  </motion.button>
+              <div className="flex items-center gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={async () => {
+                    setShowArchive(true);
+                    await fetchChatSessions();
+                  }}
+                  className="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+                  aria-label="Chat history"
+                  title="Chat History"
+                >
+                  <Archive className="w-5 h-5 text-indigo-500" />
+                </motion.button>
 
-                  <div className="flex-1">
-                    <textarea
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      placeholder="Ask Our AI Health"
-                      maxLength={1000}
-                      className="w-full rounded-full border-2 border-purple-200 h-12 px-4 py-3 resize-none focus:outline-none focus:border-purple-300 transition-colors"
-                      rows={1}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={sendMessage}
-                    disabled={isSending}
-                    className="ml-1 w-12 h-12 rounded-full bg-indigo-500 text-white flex items-center justify-center hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
-                    aria-label="Send message"
-                    title="Send"
-                  >
-                    <Send className="w-4 h-4" />
-                  </motion.button>
+                <div className="flex-1">
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Ask Our AI Health"
+                    maxLength={1000}
+                    className="w-full rounded-full border-2 border-purple-200 h-12 px-4 py-3 resize-none focus:outline-none focus:border-purple-300 transition-colors"
+                    rows={1}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                  />
                 </div>
 
-                <div className="mt-2 text-right text-xs text-gray-400">{text.length}/1000</div>
-              </motion.div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={sendMessage}
+                  disabled={isSending}
+                  className="ml-1 w-12 h-12 rounded-full bg-indigo-500 text-white flex items-center justify-center hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Send message"
+                  title="Send"
+                >
+                  <Send className="w-4 h-4" />
+                </motion.button>
+              </div>
+
+              <div className="mt-2 text-right text-xs text-gray-400">
+                {text.length}/1000
+              </div>
             </motion.div>
           ) : (
-            // Chat screen
+            // ✅ خلي هذا container هو اللي يسكرول داخلياً فقط
             <div
               key="chat"
-              className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-6 py-4 h-[calc(100vh-80px)]"
+              className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-6 py-4 min-h-0"
             >
-              {/* messages */}
-              <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+              {/* messages: هذا الوحيد اللي يسوي scroll */}
+              <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-1 hide-scrollbar">
                 {messages.map((message) => (
                   <motion.div
                     key={message.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                    className={`flex ${
+                      message.sender === "user"
+                        ? "justify-end"
+                        : "justify-start"
+                    }`}
                   >
                     {message.sender === "user" ? (
                       <div className="flex items-end gap-2 max-w-[80%]">
@@ -529,9 +618,10 @@ export default function AssistantPage() {
                           <div className="bg-purple-100 border border-purple-200 rounded-2xl rounded-br-none px-4 py-3">
                             <p className="text-gray-800">{message.text}</p>
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">{message.time}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {message.time}
+                          </div>
                         </div>
-
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-semibold">
                           {initials}
                         </div>
@@ -541,12 +631,18 @@ export default function AssistantPage() {
                         <span className="text-2xl">{message.emoji}</span>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className={`font-semibold ${message.color}`}>{message.agentName}</h3>
+                            <h3 className={`font-semibold ${message.color}`}>
+                              {message.agentName}
+                            </h3>
                           </div>
                           <div className="bg-gray-50 border border-gray-200 rounded-2xl rounded-bl-none px-4 py-3">
-                            <p className="text-gray-700 whitespace-pre-wrap">{message.text}</p>
+                            <p className="text-gray-700 whitespace-pre-wrap">
+                              {message.text}
+                            </p>
                           </div>
-                          <div className="text-xs text-gray-500 mt-1 text-right">{message.time}</div>
+                          <div className="text-xs text-gray-500 mt-1 text-right">
+                            {message.time}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -564,13 +660,16 @@ export default function AssistantPage() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* bottom bar */}
-              <motion.div className="sticky bottom-0 bg-white border-t border-gray-200 pt-4 pb-3">
+              {/* ✅ يبقى ثابت لأن الصفحة ما تسكرول، واللي يسكرول بس الرسائل */}
+              <motion.div className="shrink-0 bg-white border-t border-gray-200 pt-4 pb-3">
                 <div className="flex items-center gap-3">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowArchive(true)}
+                    onClick={async () => {
+                      setShowArchive(true);
+                      await fetchChatSessions();
+                    }}
                     className="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors"
                     aria-label="Chat history"
                     title="Chat History"
@@ -619,7 +718,9 @@ export default function AssistantPage() {
                   </motion.button>
                 </div>
 
-                <div className="mt-2 text-right text-xs text-gray-400">{text.length}/1000</div>
+                <div className="mt-2 text-right text-xs text-gray-400">
+                  {text.length}/1000
+                </div>
               </motion.div>
             </div>
           )}
@@ -644,10 +745,12 @@ export default function AssistantPage() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.96, opacity: 0 }}
                 transition={{ duration: 0.18 }}
-                className="relative bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl ring-1 ring-white/20"
+                className="relative bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto hide-scrollbar shadow-2xl ring-1 ring-white/20"
               >
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold text-gray-800">Chat History</h3>
+                  <h3 className="text-xl font-bold text-gray-800">
+                    Chat History
+                  </h3>
                   <button
                     onClick={() => setShowArchive(false)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -664,7 +767,10 @@ export default function AssistantPage() {
                 ) : (
                   <div className="space-y-3">
                     {chatHistory.map((chat) => (
-                      <div key={chat.id} className="flex items-start justify-between gap-3">
+                      <div
+                        key={chat.id}
+                        className="flex items-start justify-between gap-3"
+                      >
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
@@ -672,23 +778,13 @@ export default function AssistantPage() {
                           className="flex-1 text-left p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex justify-end items-start mb-2">
-                            <span className="text-xs text-gray-500">{formatDate(chat.date)}</span>
+                            <span className="text-xs text-gray-500">
+                              {formatDate(chat.updated_at || chat.created_at)}
+                            </span>
                           </div>
-                          <p className="text-sm text-gray-600 truncate">{chat.userMessage}</p>
-
-                          <div className="flex gap-2 mt-2">
-                            {Array.from(
-                              new Set(
-                                (chat.messages || [])
-                                  .filter((m) => m.sender === "agent" && m.emoji)
-                                  .map((m) => m.emoji)
-                              )
-                            ).map((emoji, i) => (
-                              <span key={i} className="text-lg">
-                                {emoji}
-                              </span>
-                            ))}
-                          </div>
+                          <p className="text-sm text-gray-800 font-semibold truncate">
+                            {chat.title || "Chat"}
+                          </p>
                         </motion.button>
 
                         <button

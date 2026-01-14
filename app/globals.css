@@ -132,3 +132,12 @@ html {
 .hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome/Safari */
 }
+/* Hide scrollbar but keep scroll */
+.hide-scrollbar::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+
