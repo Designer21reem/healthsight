@@ -15,6 +15,8 @@ export default function AssistantPage() {
 
   // ✅ UI
   const [loading, setLoading] = useState(true);
+  // ✅ لودر خاص للوك اوت
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   // Chat state
   const [text, setText] = useState("");
@@ -33,10 +35,10 @@ export default function AssistantPage() {
     { id: "psychiatrist", name: "Psychiatrist", emoji: "🧠" },
   ];
 
-  // ✅ Loading Overlay (نفس ستايل اليوزر)
+  // ✅ Loading Overlay (نفس ستايل اليوزر) + يدعم لوك اوت
   const LoadingOverlay = () => (
     <AnimatePresence>
-      {loading && (
+      {(loading || logoutLoading) && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -53,10 +55,10 @@ export default function AssistantPage() {
             <div className="w-14 h-14 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
             <div className="text-center">
               <div className="text-sm font-semibold text-gray-800">
-                Preparing your assistant
+                {logoutLoading ? "Signing you out" : "Preparing your assistant"}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                Loading your profile...
+                {logoutLoading ? "Please wait a moment..." : "Loading your profile..."}
               </div>
             </div>
           </motion.div>
@@ -68,7 +70,6 @@ export default function AssistantPage() {
   // ✅ Init (جلسة + بروفايل)
   useEffect(() => {
     initializeAssistant();
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -123,13 +124,18 @@ export default function AssistantPage() {
     }
   }, [messages]);
 
+  // ✅ Logout + لودر
   const handleLogout = async () => {
+    if (logoutLoading) return;
+    setLogoutLoading(true);
+
     try {
-      setLoading(true);
       await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Logout error:", e);
     } finally {
-      setLoading(false);
       router.push("/");
+      // ما نطفي اللودر لأن الصفحة راح تتغير
     }
   };
 
@@ -349,12 +355,15 @@ export default function AssistantPage() {
                 Back
               </motion.button>
 
-              {/* Logout */}
+              {/* Logout + Disable اثناء اللودر */}
               <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={{ scale: logoutLoading ? 1 : 1.03 }}
+                whileTap={{ scale: logoutLoading ? 1 : 0.97 }}
                 onClick={handleLogout}
-                className="rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 transition-colors flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2"
+                disabled={logoutLoading}
+                className={`rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 transition-colors flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 ${
+                  logoutLoading ? "opacity-60 cursor-not-allowed" : ""
+                }`}
                 aria-label="Logout"
                 title="Logout"
               >
@@ -523,7 +532,6 @@ export default function AssistantPage() {
                           <div className="text-xs text-gray-500 mt-1">{message.time}</div>
                         </div>
 
-                        {/* ✅ نفس الفكرة: اظهر انيشلز المستخدم */}
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-semibold">
                           {initials}
                         </div>

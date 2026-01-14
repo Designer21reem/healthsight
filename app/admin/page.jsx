@@ -10,7 +10,7 @@ export default function AdminPage() {
 	const [active, setActive] = useState('map');
 
 	return (
-		<div className="min-h-screen bg-gray-50 p-6">
+		<div className="min-h-screen bg-gray-20 p-6">
 			<div className="mx-auto max-w-7xl">
 				<TopNav active={active} onChange={setActive} />
 

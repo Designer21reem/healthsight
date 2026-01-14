@@ -25,7 +25,11 @@ export default function UserPage() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
 
+  // ✅ loading = لودر عام للصفحة
   const [loading, setLoading] = useState(true);
+  // ✅ logoutLoading = لودر خاص باللوك اوت
+  const [logoutLoading, setLogoutLoading] = useState(false);
+
   const [showQuestions, setShowQuestions] = useState(true);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -400,19 +404,26 @@ export default function UserPage() {
     hover: { scale: 1.02, transition: { duration: 0.2 } },
   };
 
+  // ✅ Logout with loader (نفس ستايل اللودر)
   const handleLogout = async () => {
+    if (logoutLoading) return;
+    setLogoutLoading(true);
+
     try {
       if (user?.id) await stopPresenceHeartbeat(user.id);
       await supabase.auth.signOut();
+    } catch (e) {
+      console.error("Logout error:", e);
     } finally {
       router.push("/");
+      // ما نسوي setLogoutLoading(false) لأن راح نطلع من الصفحة
     }
   };
 
-  // ✅ Loading Overlay
+  // ✅ Loading Overlay (نفس ستايل اليوزر)
   const LoadingOverlay = () => (
     <AnimatePresence>
-      {loading && (
+      {(loading || logoutLoading) && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -429,10 +440,12 @@ export default function UserPage() {
             <div className="w-14 h-14 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
             <div className="text-center">
               <div className="text-sm font-semibold text-gray-800">
-                Preparing your dashboard
+                {logoutLoading ? "Signing you out" : "Preparing your dashboard"}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                Loading your latest health data...
+                {logoutLoading
+                  ? "Please wait a moment..."
+                  : "Loading your latest health data..."}
               </div>
             </div>
           </motion.div>
@@ -704,7 +717,11 @@ export default function UserPage() {
                 <motion.span
                   className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-indigo-500"
                   animate={{ scale: [1, 1.6, 1], opacity: [0.9, 0.35, 0.9] }}
-                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                  transition={{
+                    duration: 1.6,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
                 />
                 <motion.svg
                   width="21"
@@ -749,10 +766,13 @@ export default function UserPage() {
 
               {/* Logout (✅ icon on mobile) */}
               <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={{ scale: logoutLoading ? 1 : 1.03 }}
+                whileTap={{ scale: logoutLoading ? 1 : 0.97 }}
                 onClick={handleLogout}
-                className="rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 transition-colors flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2"
+                disabled={logoutLoading}
+                className={`rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 transition-colors flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 ${
+                  logoutLoading ? "opacity-60 cursor-not-allowed" : ""
+                }`}
                 aria-label="Logout"
                 title="Logout"
               >
@@ -952,7 +972,12 @@ export default function UserPage() {
             </p>
             <div className="w-full h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                <RadarChart
+                  cx="50%"
+                  cy="50%"
+                  outerRadius="80%"
+                  data={radarData}
+                >
                   <PolarGrid />
                   <PolarAngleAxis
                     dataKey="subject"
@@ -982,7 +1007,9 @@ export default function UserPage() {
             whileHover="hover"
             className="md:col-span-5 bg-white rounded-xl p-6 shadow-sm"
           >
-            <h3 className="font-semibold text-gray-800 mb-2">7-Day Mood Trend</h3>
+            <h3 className="font-semibold text-gray-800 mb-2">
+              7-Day Mood Trend
+            </h3>
             <p className="text-sm text-gray-500 mb-4">
               Your mood over the past week
             </p>
@@ -1032,7 +1059,10 @@ export default function UserPage() {
               value={`${currentData.water} glasses`}
               goal="10 glasses/day"
               color="bg-blue-500"
-              percent={Math.min(100, (Number(currentData.water || 0) / 10) * 100)}
+              percent={Math.min(
+                100,
+                (Number(currentData.water || 0) / 10) * 100
+              )}
             />
 
             <Habit
@@ -1051,7 +1081,10 @@ export default function UserPage() {
               value={`${currentData.meals} meals`}
               goal="4 meals/day"
               color="bg-orange-500"
-              percent={Math.min(100, (Number(currentData.meals || 0) / 4) * 100)}
+              percent={Math.min(
+                100,
+                (Number(currentData.meals || 0) / 4) * 100
+              )}
             />
           </motion.section>
         </motion.div>
