@@ -21,6 +21,7 @@ import { HealthService } from "../../lib/healthService";
 
 export default function UserPage() {
   const router = useRouter();
+  const daysRowRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -41,6 +42,7 @@ export default function UserPage() {
   // ✅ Presence refs
   const presenceIntervalRef = useRef(null);
   const isPresenceStartedRef = useRef(false);
+  const beforeUnloadHandlerRef = useRef(null);
 
   // --- Helpers ---
   const getLast7Days = () => {
@@ -80,24 +82,43 @@ export default function UserPage() {
     });
   };
 
-  // ✅ Presence: upsert heartbeat
-  const upsertPresence = async (userId, isOnline) => {
-    if (!userId) return;
+  /**
+   * ✅ Presence: upsert heartbeat (FIXED)
+   * - always take uid from supabase session (matches auth.uid() for RLS)
+   * - avoid noisy errors on unload (sometimes request cancelled)
+   */
+  const upsertPresence = async (_userIdIgnored, isOnline, opts = {}) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    const nowIso = new Date().toISOString();
-    const payload = {
-      user_id: userId,
-      is_online: !!isOnline,
-      last_seen_at: nowIso,
-      updated_at: nowIso,
-    };
+      const uid = session?.user?.id;
+      if (!uid) return;
 
-    const { error } = await supabase
-      .from("user_presence_last_seen")
-      .upsert(payload, { onConflict: "user_id" });
+      const nowIso = new Date().toISOString();
 
-    if (error) {
-      console.error("Presence upsert error:", error);
+      const payload = {
+        user_id: uid, // ✅ must match auth.uid()
+        is_online: !!isOnline,
+        last_seen_at: nowIso,
+        updated_at: nowIso,
+      };
+
+      const { error } = await supabase
+        .from("user_presence_last_seen")
+        .upsert(payload, { onConflict: "user_id" });
+
+      if (error) {
+        // لو كان unload، لا نطلع error لأن غالباً الطلب ينلغي
+        if (!opts?.silent) {
+          console.error("Presence upsert error:", error);
+        }
+      }
+    } catch (e) {
+      if (!opts?.silent) {
+        console.error("Presence upsert unexpected error:", e);
+      }
     }
   };
 
@@ -106,21 +127,21 @@ export default function UserPage() {
     if (isPresenceStartedRef.current) return;
     isPresenceStartedRef.current = true;
 
+    // online now
     await upsertPresence(userId, true);
 
+    // heartbeat each minute
     presenceIntervalRef.current = setInterval(() => {
       upsertPresence(userId, true);
     }, 60 * 1000);
 
+    // mark offline on close (silent to avoid console spam)
     const handleBeforeUnload = () => {
-      upsertPresence(userId, false);
+      upsertPresence(userId, false, { silent: true });
     };
 
+    beforeUnloadHandlerRef.current = handleBeforeUnload;
     window.addEventListener("beforeunload", handleBeforeUnload);
-
-    startPresenceHeartbeat._cleanup = () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
   };
 
   const stopPresenceHeartbeat = async (userId) => {
@@ -129,7 +150,13 @@ export default function UserPage() {
         clearInterval(presenceIntervalRef.current);
         presenceIntervalRef.current = null;
       }
-      if (startPresenceHeartbeat._cleanup) startPresenceHeartbeat._cleanup();
+
+      if (beforeUnloadHandlerRef.current) {
+        window.removeEventListener("beforeunload", beforeUnloadHandlerRef.current);
+        beforeUnloadHandlerRef.current = null;
+      }
+
+      // mark offline
       await upsertPresence(userId, false);
     } catch (e) {
       console.error("stopPresenceHeartbeat error:", e);
@@ -823,39 +850,62 @@ export default function UserPage() {
           </div>
         </motion.div>
 
-        {/* Days row */}
+       {/* Days row */}
+{/* Days row */}
+<motion.div
+  ref={daysRowRef}
+  tabIndex={0}
+  role="listbox"
+  aria-label="Select day"
+  variants={containerVariants}
+  initial="hidden"
+  animate="visible"
+  onKeyDown={(e) => {
+    if (!daysRowRef.current) return;
+
+    const step = 90; // مقدار التحريك (px) غيريه إذا تحبين
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      daysRowRef.current.scrollBy({ left: step, behavior: "smooth" });
+    }
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      daysRowRef.current.scrollBy({ left: -step, behavior: "smooth" });
+    }
+  }}
+  className="
+    hide-scrollbar outline-none
+    flex gap-3 overflow-x-auto pb-3 mb-6 pt-3
+    snap-x snap-mandatory scroll-smooth
+    touch-pan-x overscroll-x-contain
+  "
+>
+  {currentDays.map((day) => (
+    <motion.button
+      key={day.date}
+      variants={itemVariants}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={() => setSelectedDate(day.date)}
+      className={`snap-center relative flex-none w-14 h-14 rounded-full flex flex-col items-center justify-center text-xs shadow-sm transition-all ${
+        selectedDate === day.date
+          ? "bg-white border-2 border-indigo-200 text-slate-900 shadow-md"
+          : "bg-gray-100 text-gray-500"
+      } ${day.isToday ? "ring-2 ring-green-400" : ""}`}
+      aria-pressed={selectedDate === day.date}
+    >
+      <span className="text-sm font-bold">{day.day}</span>
+      <span className="mt-0.5">{day.label}</span>
+      {day.isToday && (
         <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="flex gap-3 overflow-x-auto pb-3 mb-6 pt-3"
-        >
-          {currentDays.map((day) => (
-            <motion.button
-              key={day.date}
-              variants={itemVariants}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setSelectedDate(day.date)}
-              className={`relative flex-none w-14 h-14 rounded-full flex flex-col items-center justify-center text-xs shadow-sm transition-all ${
-                selectedDate === day.date
-                  ? "bg-white border-2 border-indigo-200 text-slate-900 shadow-md"
-                  : "bg-gray-100 text-gray-500"
-              } ${day.isToday ? "ring-2 ring-green-400" : ""}`}
-              aria-pressed={selectedDate === day.date}
-            >
-              <span className="text-sm font-bold">{day.day}</span>
-              <span className="mt-0.5">{day.label}</span>
-              {day.isToday && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"
-                />
-              )}
-            </motion.button>
-          ))}
-        </motion.div>
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"
+        />
+      )}
+    </motion.button>
+  ))}
+</motion.div>
 
         {/* (rest of your page stays the same) */}
         <motion.div
@@ -927,7 +977,7 @@ export default function UserPage() {
             variants={cardVariants}
             className="md:col-span-12 bg-white rounded-xl p-6 shadow-sm"
           >
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Metric
                 title="Mood"
                 value={`${currentData.mood}/10`}
@@ -1100,7 +1150,7 @@ function Metric({ title, value, color = "bg-blue-500", progress = 60 }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.05 }}
-      className="bg-gray-50 rounded-xl p-4"
+      className="bg-gray-50 rounded-xl p-3 sm:p-4 min-w-0"
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -1114,7 +1164,7 @@ function Metric({ title, value, color = "bg-blue-500", progress = 60 }) {
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ delay: 0.2 }}
-          className="text-lg font-bold text-gray-900"
+          className="text-base sm:text-lg font-bold text-gray-900"
         >
           {value}
         </motion.div>

@@ -213,11 +213,22 @@ export default function Page() {
             platform bridges personal health data with population-level insights to predict potential outbreaks and
             prevent the spread of diseases.
           </p>
-          <div className="mt-8 inline-block relative z-10">
-            <span className="p-4 rounded-full shadow bg-white text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-500">
-              Turning individual health signals into global awareness
-            </span>
-          </div>
+          <div className="mt-8 relative z-10 flex justify-center">
+  <span
+    className="
+      inline-flex items-center justify-center
+      px-5 py-3 sm:px-6 sm:py-3
+      max-w-[92%] sm:max-w-none
+      text-center leading-snug
+      rounded-2xl sm:rounded-full
+      shadow bg-white
+      text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-500
+    "
+  >
+    Turning individual health signals into global awareness
+  </span>
+</div>
+
         </motion.section>
 
         {/* Key Features */}

@@ -11,11 +11,16 @@ const SAMPLE_ARTICLES = [
     author: "Dr. Amina Khalid",
     date: "09/12/2025",
     views: 1240,
-    excerpt: "Learn how lifestyle, nutrition, and early detection can help manage diabetes effectively.",
+    excerpt:
+      "Learn how lifestyle, nutrition, and early detection can help manage diabetes effectively.",
     image: "/Diabetes.svg",
     highlight: "Quick prevention tips and dietary changes that make a difference.",
     content: "Full article content about diabetes... (replace with real content).",
-    keyPoints: ["Symptoms and early detection", "Diet and lifestyle", "Medication and monitoring"],
+    keyPoints: [
+      "Symptoms and early detection",
+      "Diet and lifestyle",
+      "Medication and monitoring",
+    ],
   },
   {
     id: 2,
@@ -27,7 +32,8 @@ const SAMPLE_ARTICLES = [
     excerpt:
       "Discover how just 30 minutes of physical activity can boost your immunity, reduce stress, and support a healthy heart.",
     image: "/power.svg",
-    highlight: "Explore strategies to maintain mental wellness during disease outbreaks and health emergencies.",
+    highlight:
+      "Explore strategies to maintain mental wellness during disease outbreaks and health emergencies.",
     content: "Full article content about exercise... (replace with real content).",
     keyPoints: ["30 minutes daily", "Cardio and strength mix", "Consistency matters"],
   },
@@ -38,7 +44,8 @@ const SAMPLE_ARTICLES = [
     author: "Dr. Lina Farah",
     date: "08/05/2025",
     views: 980,
-    excerpt: "Find out the major risk factors and simple daily habits that can reduce your chances of heart-related diseases.",
+    excerpt:
+      "Find out the major risk factors and simple daily habits that can reduce your chances of heart-related diseases.",
     image: "/Heart.svg",
     highlight: "Key lifestyle changes to improve cardiovascular health.",
     content: "Full article content about heart disease... (replace with real content).",
@@ -48,7 +55,7 @@ const SAMPLE_ARTICLES = [
 
 function safeImg(src) {
   const s = (src || "").trim();
-  return s.length ? s : null; // ✅ لا ترجع ""
+  return s.length ? s : null;
 }
 
 function ArticleModal({ article, onClose }) {
@@ -58,7 +65,7 @@ function ArticleModal({ article, onClose }) {
   const modal = (
     <div className="fixed inset-0 z-60 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-2xl rounded-xl bg-white p-8 shadow-2xl max-h-[90vh] overflow-auto">
+      <div className="relative w-full max-w-2xl rounded-xl bg-white p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-auto">
         <button
           onClick={onClose}
           aria-label="Close"
@@ -72,7 +79,7 @@ function ArticleModal({ article, onClose }) {
         </div>
         <h2 className="mt-4 text-2xl font-extrabold">{article.title}</h2>
 
-        <div className="mt-3 flex items-center gap-4 text-sm text-gray-500">
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-500">
           <div>👤 {article.author}</div>
           <div>📅 {article.date}</div>
           <div>👁️ {article.views} views</div>
@@ -97,8 +104,8 @@ function ArticleModal({ article, onClose }) {
 
         <h3 className="mt-6 text-lg font-bold">Recommendations</h3>
         <p className="mt-2 text-gray-700">
-          Consult with healthcare professionals for personalized advice. This article is for informational purposes only
-          and should not replace professional medical consultation.
+          Consult with healthcare professionals for personalized advice. This article is for
+          informational purposes only and should not replace professional medical consultation.
         </p>
       </div>
     </div>
@@ -134,7 +141,7 @@ export default function ArticlesClient() {
         : new Date(a.created_at).toLocaleDateString("en-GB"),
       views: a.views || 0,
       excerpt: a.excerpt || "",
-      image: safeImg(a.image), // ✅ هنا
+      image: safeImg(a.image),
       highlight: a.highlight || "",
       content: a.content || "",
       keyPoints: a.key_points || [],
@@ -152,9 +159,13 @@ export default function ArticlesClient() {
 
     const channel = supabase
       .channel("articles_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "articles" }, () => {
-        fetchPublishedArticles();
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "articles" },
+        () => {
+          fetchPublishedArticles();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -167,20 +178,29 @@ export default function ArticlesClient() {
 
   if (!articles || articles.length === 0) return null;
 
-  // ✅ حماية إذا عدد المقالات قليل
   const safeIndex = ((index % articles.length) + articles.length) % articles.length;
   const center = articles[safeIndex];
-  const left = articles.length >= 2 ? articles[(safeIndex - 1 + articles.length) % articles.length] : center;
-  const right = articles.length >= 3 ? articles[(safeIndex + 1) % articles.length] : left;
+  const left =
+    articles.length >= 2
+      ? articles[(safeIndex - 1 + articles.length) % articles.length]
+      : center;
+  const right =
+    articles.length >= 3
+      ? articles[(safeIndex + 1) % articles.length]
+      : left;
 
   async function openAndCountViews(article) {
     setModalArticle(article);
 
     setArticles((prevArts) =>
-      prevArts.map((a) => (a.id === article.id ? { ...a, views: (a.views || 0) + 1 } : a))
+      prevArts.map((a) =>
+        a.id === article.id ? { ...a, views: (a.views || 0) + 1 } : a
+      )
     );
 
-    const { error } = await supabase.rpc("increment_article_views", { article_id: article.id });
+    const { error } = await supabase.rpc("increment_article_views", {
+      article_id: article.id,
+    });
     if (error) {
       console.error("Increment views error:", error);
       await fetchPublishedArticles();
@@ -192,31 +212,47 @@ export default function ArticlesClient() {
 
   return (
     <div className="relative">
-      <div className="flex items-start justify-center gap-6">
+      {/* =========================
+          Desktop / Tablet (3 cards)
+          ========================= */}
+      <div className="hidden md:flex items-start justify-center gap-6">
         <article className="w-48 rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
-          {/* ✅ لا نرندر img إذا ماكو صورة */}
           {safeImg(left.image) ? (
-            <img src={left.image} alt={left.title} className="mb-3 h-20 w-full rounded-md object-cover" />
+            <img
+              src={left.image}
+              alt={left.title}
+              className="mb-3 h-20 w-full rounded-md object-cover"
+            />
           ) : (
             <div className="mb-3 h-20 w-full rounded-md bg-gray-100" />
           )}
           <h3 className="text-sm font-semibold">{left.title}</h3>
           <p className="mt-2 text-xs text-gray-500">{left.excerpt}</p>
-          <button onClick={() => openAndCountViews(left)} className="mt-3 inline-block text-xs text-indigo-600">
+          <button
+            onClick={() => openAndCountViews(left)}
+            className="mt-3 inline-block text-xs text-indigo-600"
+          >
             Read more →
           </button>
         </article>
 
         <article className="w-[540px] rounded-lg border border-gray-100 bg-white p-6 shadow-md relative">
           {safeImg(center.image) ? (
-            <img src={center.image} alt={center.title} className="mb-4 h-44 w-full rounded-md object-cover" />
+            <img
+              src={center.image}
+              alt={center.title}
+              className="mb-4 h-44 w-full rounded-md object-cover"
+            />
           ) : (
             <div className="mb-4 h-44 w-full rounded-md bg-gray-100" />
           )}
 
           <h2 className="text-xl font-bold">{center.title}</h2>
           <p className="mt-3 text-sm text-gray-600">{center.excerpt}</p>
-          <button onClick={() => openAndCountViews(center)} className="mt-4 inline-block text-sm text-indigo-600">
+          <button
+            onClick={() => openAndCountViews(center)}
+            className="mt-4 inline-block text-sm text-indigo-600"
+          >
             Read more →
           </button>
 
@@ -242,25 +278,96 @@ export default function ArticlesClient() {
 
         <article className="w-48 rounded-lg border border-gray-100 bg-white p-4 shadow-sm">
           {safeImg(right.image) ? (
-            <img src={right.image} alt={right.title} className="mb-3 h-20 w-full rounded-md object-cover" />
+            <img
+              src={right.image}
+              alt={right.title}
+              className="mb-3 h-20 w-full rounded-md object-cover"
+            />
           ) : (
             <div className="mb-3 h-20 w-full rounded-md bg-gray-100" />
           )}
           <h3 className="text-sm font-semibold">{right.title}</h3>
           <p className="mt-2 text-xs text-gray-500">{right.excerpt}</p>
-          <button onClick={() => openAndCountViews(right)} className="mt-3 inline-block text-xs text-indigo-600">
+          <button
+            onClick={() => openAndCountViews(right)}
+            className="mt-3 inline-block text-xs text-indigo-600"
+          >
             Read more →
           </button>
         </article>
       </div>
 
-      <div className="mt-8 flex items-center justify-center gap-3">
+      {/* =========================
+          Mobile (ONE article only + arrows)
+          ========================= */}
+      <div className="md:hidden">
+        <div className="relative">
+          {articles.length > 1 && (
+            <>
+              <button
+                onClick={prev}
+                aria-label="Previous"
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 rounded-full bg-white/95 p-2 shadow border border-gray-100 active:scale-95 transition-transform"
+              >
+                ◀
+              </button>
+              <button
+                onClick={next}
+                aria-label="Next"
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 rounded-full bg-white/95 p-2 shadow border border-gray-100 active:scale-95 transition-transform"
+              >
+                ▶
+              </button>
+            </>
+          )}
+
+          <article className="w-full rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+            {safeImg(center.image) ? (
+              <img
+                src={center.image}
+                alt={center.title}
+                className="mb-4 h-44 w-full rounded-lg object-cover"
+              />
+            ) : (
+              <div className="mb-4 h-44 w-full rounded-lg bg-gray-100" />
+            )}
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-xs text-white">
+                {center.tag}
+              </div>
+              <div className="text-xs text-gray-500">{center.date}</div>
+            </div>
+
+            <h2 className="mt-3 text-lg font-bold leading-snug">{center.title}</h2>
+            <p className="mt-2 text-sm text-gray-600">{center.excerpt}</p>
+
+            <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+              <span>👤 {center.author}</span>
+              <span>👁️ {center.views}</span>
+            </div>
+
+            <button
+              onClick={() => openAndCountViews(center)}
+              className="mt-4 inline-flex items-center text-sm font-medium text-indigo-600"
+            >
+              Read more →
+            </button>
+          </article>
+        </div>
+      </div>
+
+      {/* Dots */}
+      <div className="mt-6 flex items-center justify-center gap-3">
         {articles.map((a, i) => (
           <button
             key={a.id}
             onClick={() => setIndex(i)}
-            className={`h-2 w-2 rounded-full ${i === safeIndex ? "bg-indigo-500" : "bg-indigo-100"}`}
-          ></button>
+            className={`h-2 w-2 rounded-full ${
+              i === safeIndex ? "bg-indigo-500" : "bg-indigo-100"
+            }`}
+            aria-label={`Go to article ${i + 1}`}
+          />
         ))}
       </div>
 
