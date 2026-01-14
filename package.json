@@ -17,6 +17,7 @@
     "lucide-react": "^0.553.0",
     "mapbox-gl": "^3.16.0",
     "next": "16.0.1",
+    "openai": "^6.16.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "recharts": "^2.15.4",
