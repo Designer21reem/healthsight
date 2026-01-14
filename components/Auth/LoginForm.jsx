@@ -1,100 +1,207 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { supabase } from "../../lib/supabaseClient";
 
-export default function LoginForm({ open, onClose }) {
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
+export default function LoginForm({ open, onClose, onShowRegister }) {
+  const [mounted, setMounted] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-	useEffect(() => {
-		function onKey(e) {
-			if (e.key === "Escape") onClose();
-		}
-		if (open) window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [open, onClose]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-	function handleSubmit(e) {
-		e.preventDefault();
-		// Placeholder: implement real auth flow
-		console.log("login", { email, password });
-		onClose();
-	}
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-	if (!open) return null;
-	if (typeof document === "undefined") return null;
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose?.();
+    }
+    if (open) window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
-	const modal = (
-		<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-			<div className="absolute inset-0 bg-black/40" onClick={onClose} />
+  // ✅ مهم: لا تسوي onClose هنا حتى ما يصير تعارض
+  const handleSwitchToRegister = () => {
+    onShowRegister?.();
+  };
 
-			<div className="relative w-full max-w-2xl rounded-2xl bg-white p-8 shadow-2xl max-h-[90vh] overflow-auto">
-				<button
-					aria-label="Close"
-					onClick={onClose}
-					className="absolute right-4 top-4 rounded-md p-2 text-gray-500 hover:bg-gray-100"
-				>
-					✕
-				</button>
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-				<header className="mb-6 text-center">
-					<h2 className="text-2xl font-extrabold">sign in to your <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-pink-500">Health Companion</span></h2>
-				</header>
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
 
-				<form onSubmit={handleSubmit} className="space-y-4">
-					<div>
-						<label className="mb-2 block text-sm text-gray-600">Email</label>
-						<input
-							type="email"
-							required
-							value={email}
-							onChange={(e) => setEmail(e.target.value)}
-							className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
-							placeholder="you@example.com"
-						/>
-					</div>
+    if (!cleanEmail || !cleanPassword) {
+      setError("Please fill in all fields.");
+      setLoading(false);
+      return;
+    }
 
-					<div>
-						<label className="mb-2 block text-sm text-gray-600">Password</label>
-						<input
-							type="password"
-							required
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200"
-							placeholder="••••••••"
-						/>
-					</div>
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
 
-					<div className="flex items-center justify-between">
-						<div />
-						<a className="text-sm text-indigo-600 hover:underline" href="#">Forgot your password?</a>
-					</div>
+      if (authError) {
+        if (authError.message?.includes("Invalid login credentials")) {
+          setError("Invalid email or password.");
+        } else if (authError.message?.includes("Email not confirmed")) {
+          setError("Please confirm your email address first.");
+        } else if (authError.message?.toLowerCase()?.includes("rate limit")) {
+          setError("Too many attempts. Please try again later.");
+        } else {
+          setError(authError.message || "Login failed. Please try again.");
+        }
+        setLoading(false);
+        return;
+      }
 
-					<button
-						type="submit"
-						className="w-full rounded-full bg-indigo-600 px-6 py-3 text-lg font-medium text-white shadow hover:bg-indigo-700"
-					>
-						Log in
-					</button>
+      if (authData?.user) {
+        // جلب role من profiles حتى نوجه
+        let userRole = "user";
+        try {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", authData.user.id)
+            .single();
 
-					<div className="my-4 flex items-center gap-4">
-						<hr className="flex-1 border-gray-200" />
-						<span className="text-sm text-gray-400">OR</span>
-						<hr className="flex-1 border-gray-200" />
-					</div>
+          userRole = profileData?.role || "user";
+        } catch {
+          userRole = "user";
+        }
 
-					<button type="button" className="flex w-full items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3 text-sm">
-						<img src="/google-icon.svg" alt="Google" className="h-5 w-5" />
-						Continue with Google
-					</button>
+        // تنظيف وإغلاق
+        setEmail("");
+        setPassword("");
+        onClose?.();
 
-					<p className="mt-4 text-center text-sm text-gray-500">Don’t have an account? <a className="text-indigo-600 hover:underline" href="#">Sign up</a></p>
-				</form>
-			</div>
-		</div>
-	);
+        // توجيه حسب role
+        setTimeout(() => {
+          window.location.href = userRole === "admin" ? "/admin" : "/user";
+        }, 50);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-	return createPortal(modal, document.body);
+  if (!open) return null;
+  if (!mounted) return null;
+  if (typeof document === "undefined") return null;
+
+  const modal = (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+        <button
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-md p-2 text-gray-500 hover:bg-gray-100"
+          disabled={loading}
+        >
+          ✕
+        </button>
+
+        <header className="mb-6 text-center">
+          <h2 className="text-2xl font-extrabold">
+            Sign in to{" "}
+            <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-pink-500">
+              Health Companion
+            </span>
+          </h2>
+          <p className="mt-2 text-sm text-gray-500">Welcome back! Please enter your details.</p>
+        </header>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="mb-2 block text-sm text-gray-600">Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:opacity-50"
+              placeholder="you@example.com"
+              disabled={loading}
+              autoComplete="email"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm text-gray-600">Password</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:opacity-50"
+              placeholder="••••••••"
+              disabled={loading}
+              autoComplete="current-password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-full bg-indigo-600 px-6 py-3 text-lg font-medium text-white shadow hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+          >
+            {loading ? (
+              <div className="flex items-center justify-center">
+                <svg
+                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                Signing in...
+              </div>
+            ) : (
+              "Log in"
+            )}
+          </button>
+
+          <div className="pt-4 border-t border-gray-200">
+            <p className="text-center text-sm text-gray-500">
+              Don&apos;t have an account?{" "}
+              <button
+                type="button"
+                onClick={handleSwitchToRegister}
+                className="text-indigo-600 hover:underline font-medium"
+                disabled={loading}
+              >
+                Sign up
+              </button>
+            </p>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  return createPortal(modal, document.body);
 }
-

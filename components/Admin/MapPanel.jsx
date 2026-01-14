@@ -4,30 +4,9 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-/**
- * Complete, standalone React component (Next.js "use client" compatible)
- * - Features included:
- *   • Mapbox map centered on Iraq
- *   • 5 diseases (Influenza, Cholera, Measles, Dengue, COVID-19)
- *   • Time slider + date-range filter (Date inputs)
- *   • Play / Pause animation over time using requestAnimationFrame
- *   • Auto-refresh placeholder (every 60s) to fetch new data from an API (simulated)
- *   • Heatmap + circle points (points appear when zoomed in)
- *   • Popup on point click showing city / disease / cases / date
- *   • Legend + controls + dynamic stats below the map that update with disease & date
- *
- * Installation prerequisites:
- *   npm install mapbox-gl
- *   (optional) Tailwind CSS for the classes used; otherwise replace with your CSS
- *
- * IMPORTANT:
- *   - Put your Mapbox public token in env variable NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
- *     or replace the fallback token below with your token (not recommended to commit tokens).
- */
-
 mapboxgl.accessToken =
   process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ||
-  "pk.eyJ1IjoicmVlbTIxIiwiYSI6ImNtaGdzc2RpbjBic2gyaXFydzhibDIzenMifQ.3EFdZ0ywTR6lBxkMVcGL4A"; // fallback (replace with yours for quick testing)
+  "pk.eyJ1IjoicmVlbTIxIiwiYSI6ImNtaGdzc2RpbjBic2gyaXFydzhibDIzenMifQ.3EFdZ0ywTR6lBxkMVcGL4A";
 
 export default function AdvancedDiseaseMapPanel() {
   const mapContainer = useRef(null);
@@ -35,25 +14,20 @@ export default function AdvancedDiseaseMapPanel() {
   const rafRef = useRef(null);
   const autoRefreshRef = useRef(null);
 
-  // ---- UI State ----
   const [selectedDisease, setSelectedDisease] = useState("All");
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(1); // multiplier for animation speed (1x, 2x, ...)
-  const [timeIndex, setTimeIndex] = useState(0); // index into timeSteps
-  const [startDate, setStartDate] = useState(null); // ISO date string
-  const [endDate, setEndDate] = useState(null); // ISO date string
-  const [timeSteps, setTimeSteps] = useState([]); // array of ISO date strings
+  const [playSpeed, setPlaySpeed] = useState(1);
+  const [timeIndex, setTimeIndex] = useState(0);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [timeSteps, setTimeSteps] = useState([]);
   const [lastAutoRefreshAt, setLastAutoRefreshAt] = useState(null);
 
-  // ---- Example time-series dataset (IN-MEMORY) ----
-  // Each city feature contains a per-disease time-series map: { "YYYY-MM-DD": cases, ... }
-  // In a real app you'd fetch this from an API and store remotely.
   const initialCityDataset = [
     {
       city: "Baghdad",
       coord: [44.3661, 33.3152],
       series: {
-        // dates -> disease -> cases
         "2025-10-20": { Influenza: 120, Cholera: 0, Measles: 2, Dengue: 0, "COVID-19": 25 },
         "2025-10-21": { Influenza: 150, Cholera: 0, Measles: 3, Dengue: 0, "COVID-19": 30 },
         "2025-10-22": { Influenza: 200, Cholera: 0, Measles: 1, Dengue: 0, "COVID-19": 40 },
@@ -107,88 +81,55 @@ export default function AdvancedDiseaseMapPanel() {
     },
   ];
 
-  // diseases list (5 diseases)
   const diseasesList = ["All", "Influenza", "Cholera", "Measles", "Dengue", "COVID-19"];
 
-  // disease information lookup (example content)
   const diseaseInfo = {
-    All: {
-      incubation: "Varies",
-      transmission: "Multiple modes",
-      vaccination: "Varies",
-      prevention: "Hygiene, surveillance",
-    },
-    Influenza: {
-      incubation: "1 - 4 days",
-      transmission: "Airborne droplets",
-      vaccination: "Available",
-      prevention: "Vaccination, masks, hand hygiene",
-    },
-    Cholera: {
-      incubation: "1 - 5 days",
-      transmission: "Contaminated water/food",
-      vaccination: "Available (oral)",
-      prevention: "Clean water, sanitation",
-    },
-    Measles: {
-      incubation: "10 - 14 days",
-      transmission: "Airborne droplets",
-      vaccination: "Available (MMR)",
-      prevention: "Vaccination, isolation",
-    },
-    Dengue: {
-      incubation: "4 - 10 days",
-      transmission: "Mosquito-borne",
-      vaccination: "Limited",
-      prevention: "Mosquito control, nets",
-    },
-    "COVID-19": {
-      incubation: "2 - 14 days",
-      transmission: "Airborne droplets & aerosols",
-      vaccination: "Available",
-      prevention: "Vaccination, masks, distancing",
-    },
+    All: { incubation: "Varies", transmission: "Multiple modes", vaccination: "Varies", prevention: "Hygiene, surveillance" },
+    Influenza: { incubation: "1 - 4 days", transmission: "Airborne droplets", vaccination: "Available", prevention: "Vaccination, masks, hand hygiene" },
+    Cholera: { incubation: "1 - 5 days", transmission: "Contaminated water/food", vaccination: "Available (oral)", prevention: "Clean water, sanitation" },
+    Measles: { incubation: "10 - 14 days", transmission: "Airborne droplets", vaccination: "Available (MMR)", prevention: "Vaccination, isolation" },
+    Dengue: { incubation: "4 - 10 days", transmission: "Mosquito-borne", vaccination: "Limited", prevention: "Mosquito control, nets" },
+    "COVID-19": { incubation: "2 - 14 days", transmission: "Airborne droplets & aerosols", vaccination: "Available", prevention: "Vaccination, masks, distancing" },
   };
 
-  // ---- Build timeSteps from dataset (once) ----
-  useEffect(() => {
-    // gather all unique dates from initialCityDataset
-    const datesSet = new Set();
-    initialCityDataset.forEach((c) => {
-      Object.keys(c.series).forEach((d) => datesSet.add(d));
+  // ✅ helper: resize map safely
+  const safeResizeMap = useCallback(() => {
+    if (!map.current) return;
+    // sometimes needs 2 frames to settle layout
+    requestAnimationFrame(() => {
+      try {
+        map.current.resize();
+      } catch {}
     });
+  }, []);
+
+  useEffect(() => {
+    const datesSet = new Set();
+    initialCityDataset.forEach((c) => Object.keys(c.series).forEach((d) => datesSet.add(d)));
     const sorted = Array.from(datesSet).sort();
     setTimeSteps(sorted);
-    // set defaults for date range
+
     if (sorted.length > 0) {
       setStartDate(sorted[0]);
       setEndDate(sorted[sorted.length - 1]);
-      setTimeIndex(sorted.length - 1); // default to last date
+      setTimeIndex(sorted.length - 1);
     }
-  }, []); // run once
+  }, []);
 
-  // utility: build a GeoJSON for current selected disease & date
   const buildGeoJSONForDate = useCallback(
     (targetDateIso, diseaseFilter) => {
       const features = [];
       initialCityDataset.forEach((city) => {
         const daySeries = city.series[targetDateIso];
         if (!daySeries) return;
+
         if (diseaseFilter === "All") {
-          // sum all diseases for the city that day to drive heatmap/size
           const totalCases = Object.values(daySeries).reduce((s, v) => s + (v || 0), 0);
           if (totalCases > 0) {
             features.push({
               type: "Feature",
               geometry: { type: "Point", coordinates: city.coord },
-              properties: {
-                city: city.city,
-                disease: "All",
-                cases: totalCases,
-                date: targetDateIso,
-                // keep breakdown for popup
-                breakdown: daySeries,
-              },
+              properties: { city: city.city, disease: "All", cases: totalCases, date: targetDateIso, breakdown: daySeries },
             });
           }
         } else {
@@ -197,12 +138,7 @@ export default function AdvancedDiseaseMapPanel() {
             features.push({
               type: "Feature",
               geometry: { type: "Point", coordinates: city.coord },
-              properties: {
-                city: city.city,
-                disease: diseaseFilter,
-                cases,
-                date: targetDateIso,
-              },
+              properties: { city: city.city, disease: diseaseFilter, cases, date: targetDateIso },
             });
           }
         }
@@ -213,7 +149,7 @@ export default function AdvancedDiseaseMapPanel() {
     [initialCityDataset]
   );
 
-  // ---- Initialize Mapbox map once ----
+  // ✅ init map once
   useEffect(() => {
     if (map.current) return;
 
@@ -224,7 +160,6 @@ export default function AdvancedDiseaseMapPanel() {
       zoom: 5.3,
     });
 
-    // add controls
     map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
     map.current.addControl(new mapboxgl.ScaleControl({ maxWidth: 140, unit: "metric" }), "bottom-left");
     map.current.addControl(
@@ -237,67 +172,32 @@ export default function AdvancedDiseaseMapPanel() {
     );
 
     map.current.on("load", () => {
-      // initial source with the current timeIndex
       const date = timeSteps[timeIndex] || null;
       const initialData = date ? buildGeoJSONForDate(date, "All") : { type: "FeatureCollection", features: [] };
 
-      map.current.addSource("diseases", {
-        type: "geojson",
-        data: initialData,
-      });
+      map.current.addSource("diseases", { type: "geojson", data: initialData });
 
-      // Heatmap layer (shows density)
       map.current.addLayer({
         id: "disease-heatmap",
         type: "heatmap",
         source: "diseases",
         maxzoom: 9,
         paint: {
-          // weight by number of cases
           "heatmap-weight": ["interpolate", ["linear"], ["get", "cases"], 0, 0, 500, 1],
           "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 9, 2],
-          "heatmap-color": [
-            "interpolate",
-            ["linear"],
-            ["heatmap-density"],
-            0,
-            "rgba(0,0,255,0)",
-            0.2,
-            "royalblue",
-            0.4,
-            "cyan",
-            0.6,
-            "orange",
-            1,
-            "red",
-          ],
+          "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,255,0)", 0.2, "royalblue", 0.4, "cyan", 0.6, "orange", 1, "red"],
           "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 10, 9, 50],
           "heatmap-opacity": 0.8,
         },
       });
 
-      // Circle layer - visible only at higher zooms so users can click points
       map.current.addLayer({
         id: "disease-points",
         type: "circle",
         source: "diseases",
         minzoom: 7,
         paint: {
-          // radius grows with cases
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["get", "cases"],
-            0,
-            4,
-            50,
-            8,
-            200,
-            14,
-            500,
-            22,
-          ],
-          // color by disease type (All uses purple)
+          "circle-radius": ["interpolate", ["linear"], ["get", "cases"], 0, 4, 50, 8, 200, 14, 500, 22],
           "circle-color": [
             "case",
             ["==", ["get", "disease"], "Influenza"],
@@ -310,7 +210,7 @@ export default function AdvancedDiseaseMapPanel() {
             "#059669",
             ["==", ["get", "disease"], "COVID-19"],
             "#f97316",
-            /* default */ "#8B5CF6",
+            "#8B5CF6",
           ],
           "circle-stroke-color": "#fff",
           "circle-stroke-width": 1,
@@ -318,51 +218,53 @@ export default function AdvancedDiseaseMapPanel() {
         },
       });
 
-      // Popup on click for points
+      // ✅ IMPORTANT: resize after load (fix “box moved”)
+      setTimeout(() => safeResizeMap(), 0);
+
       map.current.on("click", "disease-points", (e) => {
         if (!e.features || !e.features[0]) return;
         const props = e.features[0].properties;
         const coords = e.features[0].geometry.coordinates.slice();
 
-        // If breakdown exists (All), show breakdown table
         let popupHtml = `<strong>${props.city}</strong><br/>Date: ${props.date || ""}<br/>Cases: ${props.cases}`;
         try {
           if (props.breakdown) {
-            // props.breakdown may be a stringified object depending on source, ensure object
             const br = typeof props.breakdown === "string" ? JSON.parse(props.breakdown) : props.breakdown;
             popupHtml += "<br/><small>Breakdown:</small><ul style='margin:6px 0 0 12px;padding:0'>";
-            Object.keys(br).forEach((k) => {
-              popupHtml += `<li style="list-style:disc">${k}: ${br[k] || 0}</li>`;
-            });
+            Object.keys(br).forEach((k) => (popupHtml += `<li style="list-style:disc">${k}: ${br[k] || 0}</li>`));
             popupHtml += "</ul>";
           }
-        } catch (err) {
-          // ignore parse errors
-        }
+        } catch {}
 
         new mapboxgl.Popup().setLngLat(coords).setHTML(popupHtml).addTo(map.current);
       });
 
-      // pointer cursor on hover
-      map.current.on("mouseenter", "disease-points", () => {
-        map.current.getCanvas().style.cursor = "pointer";
-      });
-      map.current.on("mouseleave", "disease-points", () => {
-        map.current.getCanvas().style.cursor = "";
-      });
+      map.current.on("mouseenter", "disease-points", () => (map.current.getCanvas().style.cursor = "pointer"));
+      map.current.on("mouseleave", "disease-points", () => (map.current.getCanvas().style.cursor = ""));
     });
 
+    // ✅ resize on window change (mobile rotate etc.)
+    const onWinResize = () => safeResizeMap();
+    window.addEventListener("resize", onWinResize);
+
     return () => {
-      // cleanup map on unmount
+      window.removeEventListener("resize", onWinResize);
       if (map.current) {
         map.current.remove();
         map.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeSteps]); // run when timeSteps are ready
+  }, [timeSteps, safeResizeMap]);
 
-  // ---- Update map data whenever selectedDisease or timeIndex changes ----
+  // ✅ whenever layout-affecting states change, resize too
+  useEffect(() => {
+    if (!map.current) return;
+    // بعد ما يتغير المرض/التاريخ/الرينج، مرات الDOM يتغير
+    setTimeout(() => safeResizeMap(), 0);
+  }, [selectedDisease, startDate, endDate, safeResizeMap]);
+
+  // update geojson
   useEffect(() => {
     if (!map.current || !timeSteps.length) return;
     const date = timeSteps[timeIndex];
@@ -371,56 +273,51 @@ export default function AdvancedDiseaseMapPanel() {
     const newGeo = buildGeoJSONForDate(date, selectedDisease);
     const source = map.current.getSource("diseases");
     if (source) {
-      // set new data
       try {
         source.setData(newGeo);
       } catch (err) {
-        // Sometimes map isn't fully ready; guard
         console.warn("Could not set data on source yet", err);
       }
     }
   }, [selectedDisease, timeIndex, timeSteps, buildGeoJSONForDate]);
 
-  // ---- Animation: play through available dates ----
+  // animation
   useEffect(() => {
     let lastTime = null;
-    const baseIntervalMs = 800; // base time per step at speed 1
+    const baseIntervalMs = 800;
 
     const step = (timestamp) => {
       if (!lastTime) lastTime = timestamp;
       const delta = timestamp - lastTime;
-      // advance timeIndex when accumulated > interval / speed
       const threshold = baseIntervalMs / Math.max(0.25, playSpeed);
+
       if (delta >= threshold) {
         lastTime = timestamp;
         setTimeIndex((idx) => {
-          // advance within startDate..endDate range
           const filtered = timeSteps.filter((d) => (!startDate || d >= startDate) && (!endDate || d <= endDate));
           if (filtered.length === 0) return idx;
+
           const currentDate = timeSteps[idx];
-          // find current pos within filtered
           const pos = filtered.indexOf(currentDate);
           if (pos === -1) {
-            // not in filtered range -> set to first
             const newIdx = timeSteps.indexOf(filtered[0]);
             return newIdx === -1 ? idx : newIdx;
           }
+
           const nextPos = (pos + 1) % filtered.length;
           const nextDate = filtered[nextPos];
           const nextIdx = timeSteps.indexOf(nextDate);
           return nextIdx === -1 ? idx : nextIdx;
         });
       }
+
       rafRef.current = requestAnimationFrame(step);
     };
 
-    if (isPlaying) {
-      rafRef.current = requestAnimationFrame(step);
-    } else {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
+    if (isPlaying) rafRef.current = requestAnimationFrame(step);
+    else if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
 
     return () => {
@@ -431,29 +328,16 @@ export default function AdvancedDiseaseMapPanel() {
     };
   }, [isPlaying, playSpeed, timeSteps, startDate, endDate]);
 
-  // ---- Auto-refresh every minute (placeholder for API polling) ----
+  // auto refresh
   useEffect(() => {
-    const refreshFn = async () => {
-      // Placeholder: in a real app you'd fetch from your API and update dataset + timeSteps
-      // Example:
-      // const res = await fetch("/api/outbreaks");
-      // const updated = await res.json();
-      // process it and update dataset/timeSteps accordingly
-      // For now we just update the timestamp to show refresh happened.
-      setLastAutoRefreshAt(new Date().toISOString());
-      // If you had fetched new data, you would update initialCityDataset or state, then rebuild timeSteps.
-    };
-
-    // start immediately, then every 60s
+    const refreshFn = async () => setLastAutoRefreshAt(new Date().toISOString());
     refreshFn();
     autoRefreshRef.current = setInterval(refreshFn, 60 * 1000);
-
     return () => {
       if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
     };
   }, []);
 
-  // ---- Derived stats for UI (dynamic) ----
   const derivedStats = React.useMemo(() => {
     if (!timeSteps.length) return { totalCases: 0, highRiskCount: 0, cities: [] };
     const date = timeSteps[timeIndex];
@@ -464,14 +348,11 @@ export default function AdvancedDiseaseMapPanel() {
     return { totalCases, highRiskCount, cities };
   }, [timeIndex, timeSteps, selectedDisease, buildGeoJSONForDate]);
 
-  // ---- UI helpers ----
   const onPlayPause = () => setIsPlaying((p) => !p);
 
   const onSliderChange = (e) => {
     const val = Number(e.target.value);
-    if (!Number.isNaN(val) && timeSteps[val]) {
-      setTimeIndex(val);
-    }
+    if (!Number.isNaN(val) && timeSteps[val]) setTimeIndex(val);
   };
 
   const moveIndexBy = (delta) => {
@@ -485,76 +366,95 @@ export default function AdvancedDiseaseMapPanel() {
     });
   };
 
-  // ---- Render ----
+  const currentDateLabel = timeSteps[timeIndex] || "—";
+  const info = diseaseInfo[selectedDisease] || diseaseInfo.All;
+
   return (
-    <section className="p-4">
-      <div className="rounded-lg bg-white p-6 shadow-sm">
-        {/* Header & Controls */}
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">Outbreaks Map — Iraq</h2>
-            <div className="text-sm text-gray-500 mt-1">
-              Visualize outbreaks over time. Auto-refresh: <span className="font-medium">{lastAutoRefreshAt ? new Date(lastAutoRefreshAt).toLocaleTimeString() : "—"}</span>
+    <section className="p-3 sm:p-4">
+      <div className="rounded-lg bg-white p-4 sm:p-6 shadow-sm">
+        {/* Header + Filters */}
+        <div className="mb-4">
+          <div className="flex flex-col gap-3">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-semibold">Outbreaks Map — Iraq</h2>
+              <div className="text-xs sm:text-sm text-gray-500 mt-1">
+                Auto-refresh:{" "}
+                <span className="font-medium">
+                  {lastAutoRefreshAt ? new Date(lastAutoRefreshAt).toLocaleTimeString() : "—"}
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div className="flex gap-3 items-center">
-            <label className="text-sm">Disease</label>
-            <select
-              value={selectedDisease}
-              onChange={(e) => setSelectedDisease(e.target.value)}
-              className="rounded-md border px-3 py-1 text-sm"
-            >
-              {diseasesList.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+              <div className="sm:col-span-4">
+                <label className="text-sm font-medium text-gray-700 block mb-1">Disease</label>
+                <select
+                  value={selectedDisease}
+                  onChange={(e) => setSelectedDisease(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                >
+                  {diseasesList.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Date range controls */}
-            <div className="flex flex-col md:flex-row items-center gap-2 text-sm ">
-             <div>
-                 <label>From</label>
-              <input
-                type="date"
-                value={startDate || ""}
-                min={timeSteps[0] || ""}
-                max={endDate || timeSteps[timeSteps.length - 1] || ""}
-                onChange={(e) => setStartDate(e.target.value || null)}
-                className="rounded-md border ml-2 px-2 py-1 text-sm"
-              />
-             </div>
-                <div>   
-                                  <label>To</label>
-              <input
-                type="date"
-                value={endDate || ""}
-                min={startDate || timeSteps[0] || ""}
-                max={timeSteps[timeSteps.length - 1] || ""}
-                onChange={(e) => setEndDate(e.target.value || null)}
-                className="rounded-md border ml-2 px-2 py-1 text-sm"
-              />
+              <div className="sm:col-span-4">
+                <label className="text-sm font-medium text-gray-700 block mb-1">From</label>
+                <input
+                  type="date"
+                  value={startDate || ""}
+                  min={timeSteps[0] || ""}
+                  max={endDate || timeSteps[timeSteps.length - 1] || ""}
+                  onChange={(e) => setStartDate(e.target.value || null)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="sm:col-span-4">
+                <label className="text-sm font-medium text-gray-700 block mb-1">To</label>
+                <input
+                  type="date"
+                  value={endDate || ""}
+                  min={startDate || timeSteps[0] || ""}
+                  max={timeSteps[timeSteps.length - 1] || ""}
+                  onChange={(e) => setEndDate(e.target.value || null)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Map */}
-        <div ref={mapContainer} className="w-full h-[480px] rounded-xl shadow-lg mb-4" />
+        {/* ✅ Map wrapper prevents overflow + keeps map in place */}
+        <div className="rounded-xl overflow-hidden shadow-lg mb-4">
+          <div ref={mapContainer} className="w-full h-[360px] sm:h-[480px]" />
+        </div>
 
-        {/* Playback controls + slider */}
+        {/* Playback */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => moveIndexBy(-1)} className="rounded-md border px-3 py-1">◀</button>
-            <button onClick={onPlayPause} className="rounded-md border px-3 py-1">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3">
+            <button onClick={() => moveIndexBy(-1)} className="rounded-md border px-3 py-2 text-sm">
+              ◀ Prev
+            </button>
+
+            <button onClick={onPlayPause} className="rounded-md border px-3 py-2 text-sm">
               {isPlaying ? "Pause ⏸" : "Play ▶"}
             </button>
-            <button onClick={() => moveIndexBy(1)} className="rounded-md border px-3 py-1">▶</button>
 
-            <div className="flex items-center gap-2 ml-4">
-              <label className="text-sm">Speed</label>
-              <select value={playSpeed} onChange={(e) => setPlaySpeed(Number(e.target.value))} className="rounded-md border px-2 py-1 text-sm">
+            <button onClick={() => moveIndexBy(1)} className="rounded-md border px-3 py-2 text-sm col-span-2 sm:col-auto">
+              Next ▶
+            </button>
+
+            <div className="flex items-center gap-2 sm:ml-4">
+              <label className="text-sm text-gray-700">Speed</label>
+              <select
+                value={playSpeed}
+                onChange={(e) => setPlaySpeed(Number(e.target.value))}
+                className="rounded-md border px-2 py-2 text-sm"
+              >
                 <option value={0.5}>0.5x</option>
                 <option value={1}>1x</option>
                 <option value={2}>2x</option>
@@ -562,12 +462,11 @@ export default function AdvancedDiseaseMapPanel() {
               </select>
             </div>
 
-            <div className="ml-auto text-sm text-gray-600">
-              Current date: <span className="font-medium">{timeSteps[timeIndex] || "—"}</span>
+            <div className="text-sm text-gray-600 sm:ml-auto">
+              Date: <span className="font-medium">{currentDateLabel}</span>
             </div>
           </div>
 
-          {/* slider over all timeSteps */}
           <input
             type="range"
             min={0}
@@ -577,115 +476,105 @@ export default function AdvancedDiseaseMapPanel() {
             className="w-full"
           />
 
-          {/* small timeline labels */}
-          <div className="flex justify-between text-xs text-gray-500">
-            <div>{timeSteps[0] || ""}</div>
-            <div>{timeSteps[Math.floor((timeSteps.length - 1) / 2)] || ""}</div>
-            <div>{timeSteps[timeSteps.length - 1] || ""}</div>
+          <div className="flex justify-between text-[11px] sm:text-xs text-gray-500">
+            <div className="truncate max-w-[30%]">{timeSteps[0] || ""}</div>
+            <div className="truncate max-w-[30%]">{timeSteps[Math.floor((timeSteps.length - 1) / 2)] || ""}</div>
+            <div className="truncate max-w-[30%] text-right">{timeSteps[timeSteps.length - 1] || ""}</div>
           </div>
         </div>
 
-        {/* Legend + Stats + Areas list */}
+        {/* Rest UI */}
         <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
-          {/* Stats cards */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-4 aspect-square flex flex-col justify-center">
+            <div className="rounded-lg border p-4 flex flex-col justify-center">
               <div className="text-sm text-gray-500">Observed diseases</div>
               <div className="mt-2 text-2xl font-bold">{diseasesList.length - 1}</div>
               <div className="text-xs text-gray-400 mt-1">tracked</div>
             </div>
 
-            <div className="rounded-lg border p-4 aspect-square flex flex-col justify-center">
+            <div className="rounded-lg border p-4 flex flex-col justify-center">
               <div className="text-sm text-gray-500">Total cases (visible)</div>
-              <div className="mt-2 text-2xl font-bold">{derivedStats.totalCases.toLocaleString()}</div>
-              <div className="text-xs text-gray-400 mt-1">for selected disease & date</div>
+              <div className="mt-2 text-2xl font-bold">{new Intl.NumberFormat("en-US").format(derivedStats.totalCases)}</div>
+              <div className="text-xs text-gray-400 mt-1">for selection & date</div>
             </div>
 
-            <div className="rounded-lg border p-4 aspect-square flex flex-col justify-center">
+            <div className="rounded-lg border p-4 flex flex-col justify-center">
               <div className="text-sm text-gray-500">High-risk cities</div>
               <div className="mt-2 text-2xl font-bold">{derivedStats.highRiskCount} / {derivedStats.cities.length || 0}</div>
               <div className="text-xs text-gray-400 mt-1">≥ 200 cases</div>
             </div>
 
-            <div className="rounded-lg border p-4 aspect-square flex flex-col justify-center">
+            <div className="rounded-lg border p-4 flex flex-col justify-center">
               <div className="text-sm text-gray-500">Auto-refresh</div>
               <div className="mt-2 text-2xl font-bold">{lastAutoRefreshAt ? "On" : "—"}</div>
-              <div className="text-xs text-gray-400 mt-1">every 60s (simulated)</div>
+              <div className="text-xs text-gray-400 mt-1">every 60s</div>
             </div>
           </div>
 
-          {/* Areas list */}
           <div>
             <h3 className="font-medium mb-3">Cities (visible)</h3>
             <div className="space-y-2 max-h-56 overflow-auto">
               {derivedStats.cities.length === 0 && <div className="text-sm text-gray-500">No cities with cases for this selection.</div>}
-                {derivedStats.cities.map((c) => {
-                  const risk = c.cases >= 200 ? "High" : c.cases >= 80 ? "Mid" : "Low";
-                  return (
-                    <div
-                      key={c.city}
-                      onClick={() => {
-                        if (map.current && c.coords) map.current.flyTo({ center: c.coords, zoom: 9 });
-                      }}
-                      className="cursor-pointer flex items-center justify-between rounded-lg bg-white p-3 shadow-sm hover:shadow-md"
-                    >
-                      <div>
-                        <div className="font-medium">{c.city}</div>
-                        <div className="text-sm text-blue-600">{c.cases} cases</div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className={`rounded-full px-3 py-1 text-sm ${risk === "High" ? "bg-red-500 text-white" : risk === "Mid" ? "bg-yellow-300 text-black" : "bg-green-300 text-black"}`}>
-                          {risk}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (map.current && c.coords) map.current.flyTo({ center: c.coords, zoom: 9 });
-                          }}
-                          className="h-8 w-8 rounded-md bg-blue-600 text-white flex items-center justify-center"
-                          aria-label={`Go to ${c.city}`}
-                        >
-                          ✈
-                        </button>
-                      </div>
+
+              {derivedStats.cities.map((c) => {
+                const risk = c.cases >= 200 ? "High" : c.cases >= 80 ? "Mid" : "Low";
+                return (
+                  <div
+                    key={c.city}
+                    onClick={() => {
+                      if (map.current && c.coords) map.current.flyTo({ center: c.coords, zoom: 9 });
+                    }}
+                    className="cursor-pointer flex items-center justify-between rounded-lg bg-white p-3 shadow-sm hover:shadow-md"
+                  >
+                    <div>
+                      <div className="font-medium">{c.city}</div>
+                      <div className="text-sm text-blue-600">{c.cases} cases</div>
                     </div>
-                  );
-                })}
+
+                    <div className="flex items-center gap-3">
+                      <div className={`rounded-full px-3 py-1 text-sm ${risk === "High" ? "bg-red-500 text-white" : risk === "Mid" ? "bg-yellow-300 text-black" : "bg-green-300 text-black"}`}>
+                        {risk}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (map.current && c.coords) map.current.flyTo({ center: c.coords, zoom: 9 });
+                        }}
+                        className="h-8 w-8 rounded-md bg-blue-600 text-white flex items-center justify-center"
+                        aria-label={`Go to ${c.city}`}
+                      >
+                        ✈
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Disease info (dynamic) + Legend */}
           <div>
             <h3 className="font-medium mb-3">Disease details</h3>
 
-            {/* disease detail boxes */}
             <div className="space-y-3">
-              {(() => {
-                const info = diseaseInfo[selectedDisease] || diseaseInfo.All;
-                return (
-                  <>
-                    <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
-                      <div className="font-medium">Incubation period</div>
-                      <div className="text-blue-600 font-semibold">{info.incubation}</div>
-                    </div>
+              <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
+                <div className="font-medium">Incubation period</div>
+                <div className="text-blue-600 font-semibold">{info.incubation}</div>
+              </div>
 
-                    <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
-                      <div className="font-medium">Mode of Transmission</div>
-                      <div className="text-red-600 font-semibold">{info.transmission}</div>
-                    </div>
+              <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
+                <div className="font-medium">Mode of Transmission</div>
+                <div className="text-red-600 font-semibold">{info.transmission}</div>
+              </div>
 
-                    <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
-                      <div className="font-medium">Vaccination</div>
-                      <div className="text-green-600 font-semibold">{info.vaccination}</div>
-                    </div>
+              <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
+                <div className="font-medium">Vaccination</div>
+                <div className="text-green-600 font-semibold">{info.vaccination}</div>
+              </div>
 
-                    <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
-                      <div className="font-medium">Prevention</div>
-                      <div className="text-blue-600 font-semibold">{info.prevention}</div>
-                    </div>
-                  </>
-                );
-              })()}
+              <div className="rounded-lg bg-white p-4 shadow-sm flex items-center justify-between">
+                <div className="font-medium">Prevention</div>
+                <div className="text-blue-600 font-semibold">{info.prevention}</div>
+              </div>
             </div>
 
             <div className="mt-4">
@@ -722,12 +611,6 @@ export default function AdvancedDiseaseMapPanel() {
           </div>
         </div>
       </div>
-
-      {/* small footer */}
-      {/* <div className="mt-4 text-xs text-gray-500">
-        Tip: To feed live data later, implement an API that returns a time-series GeoJSON (or per-city series) and update the map source via{" "}
-        <code>map.getSource('diseases').setData(newGeoJSON)</code>. Auto-refresh is currently simulated.
-      </div> */}
     </section>
   );
 }
