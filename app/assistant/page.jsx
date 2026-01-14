@@ -1,11 +1,22 @@
 "use client";
+
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Archive, Plus, X } from "lucide-react";
+import { Send, Archive, Plus, X, LogOut } from "lucide-react";
+import { supabase } from "../../lib/supabaseClient";
 
 export default function AssistantPage() {
   const router = useRouter();
+
+  // ✅ Auth/Profile
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+
+  // ✅ UI
+  const [loading, setLoading] = useState(true);
+
+  // Chat state
   const [text, setText] = useState("");
   const [messages, setMessages] = useState([]);
   const [showChat, setShowChat] = useState(false);
@@ -22,27 +33,105 @@ export default function AssistantPage() {
     { id: "psychiatrist", name: "Psychiatrist", emoji: "🧠" },
   ];
 
-  // Load history
+  // ✅ Loading Overlay (نفس ستايل اليوزر)
+  const LoadingOverlay = () => (
+    <AnimatePresence>
+      {loading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+        >
+          <div className="absolute inset-0 bg-black/25" />
+          <motion.div
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.92, opacity: 0 }}
+            className="relative bg-white rounded-2xl shadow-xl px-8 py-7 flex flex-col items-center gap-4"
+          >
+            <div className="w-14 h-14 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
+            <div className="text-center">
+              <div className="text-sm font-semibold text-gray-800">
+                Preparing your assistant
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Loading your profile...
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  // ✅ Init (جلسة + بروفايل)
   useEffect(() => {
-    const saved = localStorage.getItem("chatHistory");
-    if (saved) {
-      try {
-        setChatHistory(JSON.parse(saved));
-      } catch {}
-    }
+    initializeAssistant();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function initializeAssistant() {
+    try {
+      setLoading(true);
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        router.push("/");
+        return;
+      }
+
+      setUser(session.user);
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+
+      setProfile(profileData || null);
+
+      // Load history
+      const saved = localStorage.getItem("chatHistory");
+      if (saved) {
+        try {
+          setChatHistory(JSON.parse(saved));
+        } catch {}
+      }
+
+      setLoading(false);
+    } catch (e) {
+      console.error("initializeAssistant error:", e);
+      router.push("/");
+    }
+  }
 
   // Save history
   useEffect(() => {
     localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
   }, [chatHistory]);
 
-  // Auto scroll to bottom when messages change
+  // Auto scroll
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  const handleLogout = async () => {
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+    } finally {
+      setLoading(false);
+      router.push("/");
+    }
+  };
 
   const deleteChat = (chatId) => {
     setChatHistory((prev) => prev.filter((c) => c.id !== chatId));
@@ -128,12 +217,10 @@ export default function AssistantPage() {
             )
           );
 
-          if (idx === agentMessages.length - 1) {
-            setIsSending(false);
-          }
+          if (idx === agentMessages.length - 1) setIsSending(false);
         }, (idx + 1) * 1200);
       });
-    } catch {
+    } catch (e) {
       const errorMsg = {
         id: Date.now() + 999,
         text: "صار خطأ بالاتصال بالباك اند. تأكد من /api/symptoms وجرّب مرة ثانية.",
@@ -143,7 +230,7 @@ export default function AssistantPage() {
         color: "text-gray-600",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         date: new Date().toISOString(),
-        };
+      };
 
       setMessages((prev) => [...prev, errorMsg]);
       setChatHistory((prev) =>
@@ -179,53 +266,103 @@ export default function AssistantPage() {
     });
   };
 
+  // ✅ initials for avatar fallback
+  const initials =
+    profile?.full_name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) || "U";
+
   return (
     <div className="min-h-screen bg-white text-slate-900 antialiased">
-      {/* Header */}
+      <LoadingOverlay />
+
+      {/* ✅ Header (نفس مال UserPage: responsive mobile) */}
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6 }}
         className="sticky top-0 z-50 bg-white border-b border-gray-200"
       >
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="flex items-center justify-between h-20">
-            <motion.div
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 py-3 sm:h-20 sm:py-0">
+            {/* Brand -> يرجع لليوزر بيج */}
+            <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
-              className="flex items-center gap-4"
+              onClick={() => router.push("/user")}
+              className="flex items-center gap-1 cursor-pointer min-w-[140px]"
+              aria-label="Back to dashboard"
+              title="Back to dashboard"
             >
-              <button
-                onClick={() => router.push("/user")}
-                className="text-2xl font-extrabold flex items-center gap-1 cursor-pointer"
-                aria-label="Back to dashboard"
-                title="Back to dashboard"
-              >
+              <div className="text-xl sm:text-2xl font-extrabold leading-none">
                 <span className="text-blue-600">Health</span>
-                <span className="text-slate-800">Sight</span>
-              </button>
-            </motion.div>
-
-            <div className="flex-1 hidden md:block" />
+                <span className="text-slate-800 ml-1">Sight</span>
+              </div>
+            </motion.button>
 
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="flex items-center gap-4"
+              className="flex items-center gap-2 sm:gap-4"
             >
-              <div className="flex items-center gap-3 pr-4 border-r border-gray-100">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold text-sm">
-                  NA
-                </div>
-                <div className="hidden md:flex flex-col">
-                  <span className="text-sm font-semibold">Noor Ahmed</span>
-                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                    User
+              {/* Profile (✅ مربوط بجدول profiles) */}
+              <div className="flex items-center gap-2 pr-2 sm:pr-4 sm:border-r sm:border-gray-100">
+                {profile?.avatar_url ? (
+                  <motion.img
+                    whileHover={{ scale: 1.06 }}
+                    src={profile.avatar_url}
+                    alt={profile.full_name || "User"}
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <motion.div
+                    whileHover={{ scale: 1.06 }}
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold text-xs sm:text-sm"
+                  >
+                    {initials}
+                  </motion.div>
+                )}
+
+                <div className="hidden sm:flex flex-col">
+                  <span className="text-sm font-semibold">
+                    {profile?.full_name || user?.email || "User"}
+                  </span>
+                  <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full w-fit">
+                    {profile?.role === "admin" ? "Admin" : "User"}
                   </span>
                 </div>
               </div>
+
+              {/* زر رجوع للداشبورد (اختياري) */}
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => router.push("/user")}
+                className="hidden sm:flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 transition-colors px-3 py-2 text-sm font-medium text-indigo-700"
+                title="Back"
+              >
+                Back
+              </motion.button>
+
+              {/* Logout */}
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleLogout}
+                className="rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 transition-colors flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2"
+                aria-label="Logout"
+                title="Logout"
+              >
+                <span className="hidden sm:inline text-sm text-gray-600 hover:text-red-600">
+                  Logout
+                </span>
+                <LogOut className="sm:hidden w-5 h-5 text-gray-600" />
+              </motion.button>
             </motion.div>
           </div>
         </div>
@@ -244,13 +381,26 @@ export default function AssistantPage() {
             >
               <motion.img
                 initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: [0.9, 1, 0.98, 1], y: [0, -10, -6, 0], rotate: [0, 3, -3, 0], opacity: 1 }}
-                transition={{ duration: 3.6, repeat: Infinity, repeatType: "loop", ease: "easeInOut", delay: 0.1 }}
+                animate={{
+                  scale: [0.9, 1, 0.98, 1],
+                  y: [0, -10, -6, 0],
+                  rotate: [0, 3, -3, 0],
+                  opacity: 1,
+                }}
+                transition={{
+                  duration: 3.6,
+                  repeat: Infinity,
+                  repeatType: "loop",
+                  ease: "easeInOut",
+                  delay: 0.1,
+                }}
                 src="/robot.svg"
                 alt="assistant"
                 className="mx-auto w-48 h-48 mb-6"
                 loading="lazy"
-                onError={(e) => { e.currentTarget.src = "/robot-large.png"; }}
+                onError={(e) => {
+                  e.currentTarget.src = "/robot-large.png";
+                }}
               />
 
               <motion.h1
@@ -258,7 +408,12 @@ export default function AssistantPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
                 className="text-3xl md:text-4xl font-extrabold mb-2"
-              >Hi there,<span className="text-purple-600"> John</span>
+              >
+                Hi there,
+                <span className="text-purple-600">
+                  {" "}
+                  {profile?.full_name?.split(" ")[0] || "friend"}
+                </span>
               </motion.h1>
 
               <motion.h2
@@ -350,9 +505,7 @@ export default function AssistantPage() {
               key="chat"
               className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-6 py-4 h-[calc(100vh-80px)]"
             >
-             
-
-              {/* messages scroll only */}
+              {/* messages */}
               <div className="flex-1 space-y-4 overflow-y-auto pr-1">
                 {messages.map((message) => (
                   <motion.div
@@ -369,8 +522,10 @@ export default function AssistantPage() {
                           </div>
                           <div className="text-xs text-gray-500 mt-1">{message.time}</div>
                         </div>
+
+                        {/* ✅ نفس الفكرة: اظهر انيشلز المستخدم */}
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-semibold">
-                          NA
+                          {initials}
                         </div>
                       </div>
                     ) : (
@@ -397,13 +552,13 @@ export default function AssistantPage() {
                     </div>
                   </div>
                 )}
+
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* ✅ bottom bar fixed */}
+              {/* bottom bar */}
               <motion.div className="sticky bottom-0 bg-white border-t border-gray-200 pt-4 pb-3">
                 <div className="flex items-center gap-3">
-                  {/* History (only here) */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -415,11 +570,11 @@ export default function AssistantPage() {
                     <Archive className="w-5 h-5 text-indigo-500" />
                   </motion.button>
 
-                  {/* New chat icon */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={startNewChat}className="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors"
+                    onClick={startNewChat}
+                    className="flex items-center justify-center w-10 h-10 rounded-lg bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors"
                     aria-label="New chat"
                     title="New Chat"
                   >
@@ -489,7 +644,7 @@ export default function AssistantPage() {
                     onClick={() => setShowArchive(false)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                  <X className="w-4 h-4" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
 
@@ -506,7 +661,8 @@ export default function AssistantPage() {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={() => loadChatFromHistory(chat)}
-                          className="flex-1 text-left p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                          className="flex-1 text-left p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                        >
                           <div className="flex justify-end items-start mb-2">
                             <span className="text-xs text-gray-500">{formatDate(chat.date)}</span>
                           </div>
@@ -520,7 +676,9 @@ export default function AssistantPage() {
                                   .map((m) => m.emoji)
                               )
                             ).map((emoji, i) => (
-                              <span key={i} className="text-lg">{emoji}</span>
+                              <span key={i} className="text-lg">
+                                {emoji}
+                              </span>
                             ))}
                           </div>
                         </motion.button>
