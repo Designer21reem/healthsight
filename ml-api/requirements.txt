@@ -6,3 +6,4 @@ scikit-learn
 joblib
 supabase
 python-dotenv
+requests

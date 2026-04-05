@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import joblib
+import os
+import requests
 from sklearn.base import BaseEstimator, TransformerMixin
 
 
@@ -29,6 +31,24 @@ class DiseaseFeatureEngineer(BaseEstimator, TransformerMixin):
 
 class DiseaseModel:
     def __init__(self, model_path: str = "disease_pipeline.pkl"):
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(BASE_DIR, model_path)
+
+        # إذا المودل مو موجود → حمله من Google Drive
+        if not os.path.exists(model_path):
+            print("⬇️ Downloading model from Google Drive...")
+
+            url = "https://drive.google.com/uc?id=1EgrTjsPXsprCX8DvGHNOc_PLYAev-Edc"
+            response = requests.get(url)
+
+            if response.status_code == 200:
+                with open(model_path, "wb") as f:
+                    f.write(response.content)
+                print("✅ Model downloaded successfully")
+            else:
+                raise Exception("❌ Failed to download model")
+
+        print("🚀 Loading model...")
         self.pipeline = joblib.load(model_path)
 
     def predict_pair(
@@ -36,7 +56,7 @@ class DiseaseModel:
         *,
         disease:    str,
         county:     str,
-        sex:        str   = "Total",
+        sex:        str = "Total",
         year_prev:  int,
         count_prev: float,
         rate_prev:  float,
@@ -44,20 +64,7 @@ class DiseaseModel:
         count_curr: float,
         rate_curr:  float,
     ) -> dict:
-        """
-        Builds a 2-row DataFrame [previous_year, current_year] and runs the
-        pipeline. Returns both outputs; callers should use output[1] for display.
 
-        Input shape expected by the model:
-            Disease | County | Year | Count | Rate
-            --------+--------+------+-------+-----
-            row[0]  previous year (yesterday / year N-1)
-            row[1]  current  year (today     / year N  )
-
-        pipeline.predict(df) -> [output[0], output[1]]
-            output[0] -> prediction for row[0]  (ignored)
-            output[1] -> prediction for row[1]  (stored and displayed)
-        """
         df = pd.DataFrame(
             {
                 "Disease": [disease,    disease],
