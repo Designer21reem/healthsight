@@ -1,518 +1,492 @@
 "use client";
-
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  BarChart,
-  Bar,
-  LabelList,
-  PieChart,
-  Pie,
-  Cell,
+  AreaChart, Area,
+  XAxis, YAxis, Tooltip, CartesianGrid,
+  BarChart, Bar, LabelList,
+  PieChart, Pie, Cell,
 } from "recharts";
 
-export default function AnalysisPanel() {
-  // sample/mock data — replace with real dataset wiring as needed
-  const epidemicData = [
-    { date: "2025-04-01", cases: 200 },
-    { date: "2025-04-15", cases: 600 },
-    { date: "2025-05-01", cases: 1200 },
-    { date: "2025-05-15", cases: 900 },
-    { date: "2025-06-01", cases: 1400 },
-    { date: "2025-06-15", cases: 1100 },
-    { date: "2025-07-01", cases: 800 },
-    { date: "2025-07-15", cases: 500 },
-    { date: "2025-08-01", cases: 300 },
-  ];
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-  const ageData = [
-    { group: "0-10", cases: 120 },
-    { group: "11-22", cases: 300 },
-    { group: "23-35", cases: 420 },
-    { group: "36+", cases: 260 },
-  ];
+const COLORS = [
+  "#dd24d7", "#2f63fd", "#ffdb43", "#84ebb4", "#e28500",
+  "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#10b981",
+];
 
-  const diseaseData = [
-    { name: "Influenza", value: 1200 },
-    { name: "Cholera", value: 800 },
-    { name: "Measles", value: 300 },
-    { name: "Dengue", value: 600 },
-    { name: "COVID-19", value: 900 },
-  ];
+const r2 = (n) => Math.round(((n || 0) * 100)) / 100;
 
-  const populationData = [
-    { name: "Women", value: 56 },
-    { name: "Men", value: 34 },
-    { name: "Child", value: 10 },
-  ];
+// ── Generic fetch hook ────────────────────────────────────────────────────────
+function useFetch(url) {
+  const [data, setData]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
 
-  const riskFactors = [
-    { name: "Water Quality", value: 95 },
-    { name: "Population Density", value: 80 },
-    { name: "Sanitation system", value: 70 },
-    { name: "Health Awareness", value: 45 },
-    { name: "Vaccination Coverage", value: 45 },
-  ];
-
-  const COLORS = ["#dd24d7", "#2f63fd", "#ffdb43", "#84ebb4", "#e28500"];
-
-  const [selectedDisease, setSelectedDisease] = useState("All");
-  const [timeRange, setTimeRange] = useState("Last 30 days");
-  const [viewMonths, setViewMonths] = useState(6); // 6,3,1 months
-
-  const timeMultiplier = useMemo(() => {
-    switch (timeRange) {
-      case "Today":
-        return 0.2;
-      case "Last 7 days":
-        return 0.7;
-      case "Last 30 days":
-      default:
-        return 1;
+  const load = useCallback(async () => {
+    if (!url) return;
+    try {
+      setError(null);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setData(await res.json());
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
     }
-  }, [timeRange]);
+  }, [url]);
 
-  const viewMultiplier = useMemo(() => {
-    if (viewMonths === 6) return 1;
-    if (viewMonths === 3) return 0.6;
-    if (viewMonths === 1) return 0.2;
-    return 1;
-  }, [viewMonths]);
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 60_000);
+    return () => clearInterval(id);
+  }, [load]);
 
-  const displayedDiseaseData = useMemo(() => {
-    return diseaseData.map((d) => {
-      const base = d.value;
-      const emphasis =
-        selectedDisease === "All" ? 1 : selectedDisease === d.name ? 1 : 0.3;
-      return {
+  return { data, loading, error, refetch: load };
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+export default function AnalysisPanel() {
+  const [selectedDisease, setSelectedDisease] = useState("All");
+  const [viewYears, setViewYears]             = useState(14);
+
+  // Main data: Total sex (for all charts except the sex breakdown chart)
+  const totalUrl =
+    selectedDisease === "All"
+      ? `${API_BASE}/predictions?sex=Total`
+      : `${API_BASE}/predictions/disease/${encodeURIComponent(selectedDisease)}?sex=Total`;
+
+  const { data: predictions, loading, error, refetch } = useFetch(totalUrl);
+
+  // Female data (for sex chart)
+  const femaleUrl =
+    selectedDisease === "All"
+      ? `${API_BASE}/predictions?sex=Female`
+      : `${API_BASE}/predictions/disease/${encodeURIComponent(selectedDisease)}?sex=Female`;
+
+  const { data: femaleData } = useFetch(femaleUrl);
+
+  // Male data (for sex chart)
+  const maleUrl =
+    selectedDisease === "All"
+      ? `${API_BASE}/predictions?sex=Male`
+      : `${API_BASE}/predictions/disease/${encodeURIComponent(selectedDisease)}?sex=Male`;
+
+  const { data: maleData } = useFetch(maleUrl);
+
+  // ── Diseases from DB (dynamic) ────────────────────────────────────────────
+  const diseasesInDB = useMemo(
+    () => [...new Set(predictions.map((r) => r.disease))].sort(),
+    [predictions]
+  );
+
+  // ── Year range ────────────────────────────────────────────────────────────
+  const allYears = useMemo(
+    () => [...new Set(predictions.map((r) => r.year))].sort(),
+    [predictions]
+  );
+
+  const filteredYears = useMemo(() => {
+    if (!allYears.length) return [];
+    const cutoff = allYears[allYears.length - 1] - viewYears;
+    return allYears.filter((y) => y > cutoff);
+  }, [allYears, viewYears]);
+
+  const rowsInView = useMemo(
+    () => predictions.filter(
+      (r) =>
+        filteredYears.includes(r.year) &&
+        (selectedDisease === "All" || r.disease === selectedDisease)
+    ),
+    [predictions, filteredYears, selectedDisease]
+  );
+
+  // ── Epidemic curve ────────────────────────────────────────────────────────
+  const epidemicData = useMemo(
+    () =>
+      filteredYears.map((year) => {
+        const rows = rowsInView.filter((r) => r.year === year);
+        return {
+          year,
+          observed:  Math.round(rows.reduce((s, r) => s + (r.count           || 0), 0)),
+          predicted: Math.round(rows.reduce((s, r) => s + (r.predicted_cases || 0), 0)),
+        };
+      }),
+    [rowsInView, filteredYears]
+  );
+
+  // ── Disease distribution (from DB) ────────────────────────────────────────
+  const diseaseData = useMemo(
+    () =>
+      diseasesInDB
+        .map((name) => ({
+          name,
+          value: Math.round(
+            predictions
+              .filter((r) => r.disease === name && filteredYears.includes(r.year))
+              .reduce((s, r) => s + (r.predicted_cases || 0), 0)
+          ),
+        }))
+        .filter((d) => d.value > 0),
+    [predictions, filteredYears, diseasesInDB]
+  );
+
+  const displayedDiseaseData = useMemo(
+    () =>
+      diseaseData.map((d) => ({
         ...d,
-        value: Math.max(
-          0,
-          Math.round(base * timeMultiplier * viewMultiplier * emphasis)
-        ),
+        value:
+          selectedDisease === "All"
+            ? d.value
+            : selectedDisease === d.name
+            ? d.value
+            : Math.round(d.value * 0.3),
+      })),
+    [diseaseData, selectedDisease]
+  );
+
+  // ── Sex breakdown chart — Female vs Male per year ─────────────────────────
+  const sexChartData = useMemo(() => {
+    return filteredYears.map((year) => {
+      const fRows = femaleData.filter(
+        (r) => r.year === year && (selectedDisease === "All" || r.disease === selectedDisease)
+      );
+      const mRows = maleData.filter(
+        (r) => r.year === year && (selectedDisease === "All" || r.disease === selectedDisease)
+      );
+      return {
+        year,
+        Female: Math.round(fRows.reduce((s, r) => s + (r.count || 0), 0)),
+        Male:   Math.round(mRows.reduce((s, r) => s + (r.count || 0), 0)),
       };
     });
-  }, [timeMultiplier, selectedDisease, viewMultiplier]);
+  }, [femaleData, maleData, filteredYears, selectedDisease]);
 
-  const totalDiseaseSum = useMemo(
-    () => displayedDiseaseData.reduce((s, d) => s + d.value, 0),
-    [displayedDiseaseData]
+  // ── Risk indicators ───────────────────────────────────────────────────────
+  const riskFactors = useMemo(() => {
+    if (!rowsInView.length)
+      return [
+        { name: "Outbreak Risk (avg z-score)", value: 0 },
+        { name: "High-level outbreaks",         value: 0 },
+        { name: "Moderate outbreaks",            value: 0 },
+        { name: "Normal level",                  value: 0 },
+        { name: "Records with prediction",       value: 0 },
+      ];
+
+    const n      = rowsInView.length;
+    const avgZ   = rowsInView.reduce((s, r) => s + Math.abs(r.zscore || 0), 0) / n;
+    const redPct = Math.round((rowsInView.filter((r) => r.outbreak_level === "red").length    / n) * 100);
+    const yPct   = Math.round((rowsInView.filter((r) => r.outbreak_level === "yellow").length / n) * 100);
+    const gPct   = Math.max(0, 100 - redPct - yPct);
+    const hasPred = rowsInView.filter((r) => (r.predicted_cases || 0) > 0).length;
+
+    return [
+      { name: "Outbreak Risk (avg z-score)", value: Math.min(100, Math.round(avgZ * 35)) },
+      { name: "High-level outbreaks",         value: redPct },
+      { name: "Moderate outbreaks",            value: yPct  },
+      { name: "Normal level",                  value: gPct  },
+      { name: "Records with prediction",       value: Math.round((hasPred / n) * 100) },
+    ];
+  }, [rowsInView]);
+
+  // ── Summary stats ─────────────────────────────────────────────────────────
+  const totalPredicted = useMemo(
+    () => rowsInView.reduce((s, r) => s + (r.predicted_cases || 0), 0),
+    [rowsInView]
   );
-
-  const scale = useMemo(() => {
-    if (selectedDisease === "All") return 1 * timeMultiplier;
-    const found = displayedDiseaseData.find((d) => d.name === selectedDisease);
-    if (!found) return 1 * timeMultiplier;
-    const share = found.value / Math.max(1, totalDiseaseSum);
-    return Math.max(0.4, Math.min(2, share * 3.5)) * timeMultiplier;
-  }, [selectedDisease, displayedDiseaseData, totalDiseaseSum, timeMultiplier]);
-
-  const scaledEpidemic = useMemo(
-    () =>
-      epidemicData.map((d) => ({
-        ...d,
-        cases: Math.round(d.cases * scale * viewMultiplier),
-      })),
-    [scale, viewMultiplier]
+  const totalObserved = useMemo(
+    () => rowsInView.reduce((s, r) => s + (r.count || 0), 0),
+    [rowsInView]
   );
+  const yearlyGrowth = useMemo(() => {
+    if (epidemicData.length < 2) return 0;
+    const last = epidemicData[epidemicData.length - 1]?.predicted || 0;
+    const prev = epidemicData[epidemicData.length - 2]?.predicted || 1;
+    return r2(((last - prev) / Math.max(prev, 1)) * 100);
+  }, [epidemicData]);
 
-  const scaledAge = useMemo(
-    () =>
-      ageData.map((d) => ({
-        ...d,
-        cases: Math.round(d.cases * scale * viewMultiplier),
-      })),
-    [scale, viewMultiplier]
-  );
+  const accuracy = useMemo(() => {
+    const valid = rowsInView.filter((r) => r.count > 0);
+    if (!valid.length) return 0;
+    const mape = valid.reduce((s, r) =>
+      s + Math.abs((r.predicted_cases - r.count) / r.count), 0) / valid.length;
+    return Math.round(Math.max(0, (1 - mape) * 100));
+  }, [rowsInView]);
 
-  const scaledRisk = useMemo(() => {
-    const baseMax = Math.max(...riskFactors.map((r) => r.value), 1);
-    return riskFactors.map((r) => {
-      const scaled = Math.round(((r.value * scale) / baseMax) * 100);
-      return { ...r, value: Math.max(0, Math.min(100, scaled)) };
-    });
-  }, [scale]);
+  const avgZscore = useMemo(() => {
+    if (!rowsInView.length) return 0;
+    return r2(rowsInView.reduce((s, r) => s + Math.abs(r.zscore || 0), 0) / rowsInView.length);
+  }, [rowsInView]);
 
-  const totalCases = useMemo(() => {
-    const base = diseaseData.reduce((s, d) => s + d.value, 0);
-    return Math.round(base * scale);
-  }, [scale]);
-
-  const monthlyGrowth = Math.round(12.3 * scale * 10) / 10;
-  const accuracy = Math.max(
-    50,
-    Math.round(86.7 * (1 - (1 - scale) * 0.25))
-  );
-  const responseTime = Math.max(0.5, 2.1 / Math.max(0.5, scale)).toFixed(1);
-
-  const formatShortDate = (iso) => {
-    // 2025-04-01 -> Apr 01
-    try {
-      const d = new Date(iso);
-      return d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
-    } catch {
-      return iso;
-    }
-  };
-
+  // ── render ────────────────────────────────────────────────────────────────
   return (
     <section className="p-3 sm:p-4">
       <div className="rounded-lg bg-white p-4 sm:p-6 shadow-sm space-y-6">
+
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-xl sm:text-2xl font-semibold">Analysis</h2>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="text-sm text-gray-600">View</div>
-            <select
-              value={viewMonths}
-              onChange={(e) => setViewMonths(Number(e.target.value))}
-              className="w-full sm:w-auto rounded-md border px-3 py-2 text-sm"
+          <div>
+            <h2 className="text-xl sm:text-2xl font-semibold">Analysis</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Predicted cases · Total sex · auto-refresh every 60s
+              {loading && <span className="ml-2 text-blue-400">loading…</span>}
+              {error   && <span className="ml-2 text-red-500">Error: {error}</span>}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={refetch} disabled={loading}
+              className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40"
             >
-              <option value={6}>6 months</option>
-              <option value={3}>3 months</option>
-              <option value={1}>1 month</option>
+              Refresh
+            </button>
+            <label className="text-sm text-gray-600">View</label>
+            <select
+              value={viewYears} onChange={(e) => setViewYears(Number(e.target.value))}
+              className="rounded-md border px-2 py-1.5 text-sm"
+            >
+              <option value={14}>All years</option>
+              <option value={6}>Last 6 yrs</option>
+              <option value={3}>Last 3 yrs</option>
+              <option value={1}>Last year</option>
             </select>
           </div>
         </div>
 
-        {/* Stats + Filter */}
+        {!loading && predictions.length === 0 && (
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+            No data. Run <code className="bg-yellow-100 px-1 rounded">POST /load-csv</code> to load the dataset.
+          </div>
+        )}
+
+        {/* Stat cards + filter */}
         <div className="rounded-lg border p-4 flex flex-col gap-4">
-          {/* Stat cards */}
           <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
-            <div className="rounded-md bg-white p-3 sm:p-4 text-sm border">
-              <div className="text-[11px] sm:text-xs text-gray-500">
-                Monthly Growth Rate
+            {[
+              {
+                label: "Yearly Growth",
+                value: `${yearlyGrowth >= 0 ? "+" : ""}${yearlyGrowth}%`,
+                color: yearlyGrowth >= 0 ? "text-red-600" : "text-green-600",
+              },
+              { label: "Prediction Accuracy", value: `${accuracy}%`,                               color: "text-green-600"  },
+              { label: "Total Predicted",      value: Math.round(totalPredicted).toLocaleString(), color: "text-blue-600"   },
+              { label: "Avg Z-score",          value: avgZscore,                                   color: "text-orange-500" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-md border p-3 sm:p-4">
+                <div className="text-xs text-gray-500">{label}</div>
+                <div className={`mt-2 text-lg font-bold ${color}`}>{value}</div>
               </div>
-              <div className="mt-2 text-base sm:text-lg font-bold text-red-600">
-                {monthlyGrowth}%
-              </div>
-            </div>
-
-            <div className="rounded-md bg-white p-3 sm:p-4 text-sm border">
-              <div className="text-[11px] sm:text-xs text-gray-500">
-                Prediction Accuracy
-              </div>
-              <div className="mt-2 text-base sm:text-lg font-bold text-green-600">
-                {accuracy}%
-              </div>
-            </div>
-
-            <div className="rounded-md bg-white p-3 sm:p-4 text-sm border">
-              <div className="text-[11px] sm:text-xs text-gray-500">
-                Total cases
-              </div>
-              <div className="mt-2 text-base sm:text-lg font-bold text-red-600">
-                {totalCases.toLocaleString()}
-              </div>
-            </div>
-
-            <div className="rounded-md bg-white p-3 sm:p-4 text-sm border">
-              <div className="text-[11px] sm:text-xs text-gray-500">
-                Response Time
-              </div>
-              <div className="mt-2 text-base sm:text-lg font-bold text-blue-600">
-                {responseTime} days
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Filters row */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
             <div className="sm:col-span-6">
-              <label className="block text-sm text-gray-600 mb-1">
-                Filter by disease
-              </label>
+              <label className="block text-sm text-gray-600 mb-1">Filter by disease</label>
               <select
                 value={selectedDisease}
                 onChange={(e) => setSelectedDisease(e.target.value)}
                 className="w-full rounded-md border px-3 py-2 text-sm"
               >
                 <option value="All">All</option>
-                {diseaseData.map((d) => (
-                  <option key={d.name} value={d.name}>
-                    {d.name}
-                  </option>
-                ))}
+                {diseasesInDB.map((d) => <option key={d}>{d}</option>)}
               </select>
             </div>
-
             <div className="sm:col-span-6">
-              <label className="block text-sm text-gray-600 mb-1">
-                Time range
-              </label>
-              <select
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm"
-              >
-                <option>Today</option>
-                <option>Last 7 days</option>
-                <option>Last 30 days</option>
-              </select>
+              <label className="block text-sm text-gray-600 mb-1">Total observed (reference)</label>
+              <div className="rounded-md border px-3 py-2 text-sm bg-gray-50 font-medium text-gray-700">
+                {Math.round(totalObserved).toLocaleString()} cases
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Top charts */}
+        {/* Epidemic curve + Sex breakdown */}
         <div className="grid gap-6 md:grid-cols-2">
+
           {/* Epidemic curve */}
           <div className="rounded-lg border p-4">
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start justify-between gap-2 mb-4">
               <h3 className="font-semibold">Epidemic Curve</h3>
-              <div className="text-xs text-gray-500">{viewMonths} months</div>
+              <span className="text-xs text-gray-400">{filteredYears.length} years · Total</span>
             </div>
-
-            {/* ✅ taller on mobile */}
-            <div className="mt-4 h-[280px] sm:h-56">
+            <div className="h-[280px] sm:h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={scaledEpidemic}
-                  margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
-                >
+                <AreaChart data={epidemicData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="colorCases" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8} />
+                    <linearGradient id="gObs" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#9CA3AF" stopOpacity={0.5} />
+                      <stop offset="95%" stopColor="#9CA3AF" stopOpacity={0.05} />
+                    </linearGradient>
+                    <linearGradient id="gPred" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#3B82F6" stopOpacity={0.8} />
                       <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={formatShortDate}
-                    interval="preserveStartEnd"
-                    minTickGap={16}
-                  />
-                  <YAxis tick={{ fontSize: 11 }} width={36} />
+                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={48} />
                   <Tooltip
-                    labelFormatter={(v) => `Date: ${v}`}
-                    formatter={(v) => [`${Number(v).toLocaleString()}`, "Cases"]}
+                    labelFormatter={(v) => `Year: ${v}`}
+                    formatter={(v, name) => [Number(v).toLocaleString(), name === "predicted" ? "Predicted" : "Observed"]}
                   />
-                  <Area
-                    type="monotone"
-                    dataKey="cases"
-                    stroke="#3B82F6"
-                    fillOpacity={1}
-                    fill="url(#colorCases)"
-                  />
+                  <Area type="monotone" dataKey="observed"  stroke="#9CA3AF" fill="url(#gObs)"  name="observed" />
+                  <Area type="monotone" dataKey="predicted" stroke="#3B82F6" fill="url(#gPred)" name="predicted" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-0.5 bg-gray-400 inline-block rounded" />Observed
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-0.5 bg-blue-500 inline-block rounded" />Predicted
+              </span>
+            </div>
           </div>
 
-          {/* Age distribution */}
+          {/* Cases by Sex — Female vs Male (observed count from DB) */}
           <div className="rounded-lg border p-4">
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="font-semibold">Age Distribution of cases</h3>
-              <div className="text-xs text-gray-500">By age group</div>
+            <div className="flex items-start justify-between gap-2 mb-4">
+              <h3 className="font-semibold">Cases by Sex</h3>
+              <span className="text-xs text-gray-400">Female vs Male · observed</span>
             </div>
-
-            <div className="mt-4 h-[280px] sm:h-56">
+            <div className="h-[280px] sm:h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={scaledAge}
-                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                >
+                <BarChart data={sexChartData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="group" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={36} />
+                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={52} />
                   <Tooltip
-                    formatter={(v) => [`${Number(v).toLocaleString()}`, "Cases"]}
+                    labelFormatter={(v) => `Year: ${v}`}
+                    formatter={(v, name) => [Number(v).toLocaleString(), name]}
                   />
-                  <Bar dataKey="cases" fill="#60A5FA" radius={[6, 6, 0, 0]}>
-                    <LabelList dataKey="cases" position="top" fontSize={11} />
+                  <Bar dataKey="Female" fill="#dd24d7" radius={[4, 4, 0, 0]} name="Female">
+                    <LabelList dataKey="Female" position="top" fontSize={9}
+                      formatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v || ""} />
+                  </Bar>
+                  <Bar dataKey="Male" fill="#2f63fd" radius={[4, 4, 0, 0]} name="Male">
+                    <LabelList dataKey="Male" position="top" fontSize={9}
+                      formatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v || ""} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm inline-block" style={{ background: "#dd24d7" }} />Female
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm inline-block" style={{ background: "#2f63fd" }} />Male
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Middle row */}
-        <div className="grid gap-6 md:grid-cols-3">
-          {/* Disease distribution */}
-          <div className="md:col-span-2 rounded-lg border p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        {/* Disease distribution (from DB — auto-updates when new diseases added) */}
+        <div className="rounded-lg border p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+            <div>
               <h3 className="font-semibold">Disease Distribution</h3>
-
-              {/* ✅ already have timeRange above, keep this optional */}
-              <div className="text-xs text-gray-500">
-                Tap a slice to filter
-              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Loaded from database — updates automatically when new diseases are added.
+              </p>
             </div>
+            <span className="text-xs text-gray-400 whitespace-nowrap">Click to filter</span>
+          </div>
 
-            {/* ✅ mobile: chart top + legend bottom */}
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-              <div className="w-full h-[280px] sm:h-[240px] flex items-center justify-center">
+          {diseaseData.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-sm text-gray-400">
+              No data for this selection.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="w-full h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={displayedDiseaseData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      innerRadius={45}
-                      paddingAngle={3}
-                      labelLine={false}
-                      label={({ name }) => name}
-                      onClick={(data) => {
-                        const name = data && data.name;
-                        if (!name) return;
-                        setSelectedDisease((prev) => (prev === name ? "All" : name));
+                      dataKey="value" nameKey="name"
+                      cx="50%" cy="50%"
+                      outerRadius={110} innerRadius={50}
+                      paddingAngle={3} labelLine={false}
+                      label={({ name }) => name.length > 12 ? name.slice(0, 12) + "…" : name}
+                      onClick={(d) => {
+                        if (!d?.name) return;
+                        setSelectedDisease((p) => p === d.name ? "All" : d.name);
                       }}
                     >
-                      {displayedDiseaseData.map((entry, index) => {
-                        const isActive =
-                          selectedDisease !== "All" &&
-                          selectedDisease === entry.name;
+                      {displayedDiseaseData.map((entry, i) => {
+                        const active = selectedDisease !== "All" && selectedDisease === entry.name;
                         return (
                           <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                            fillOpacity={
-                              selectedDisease === "All" ? 1 : isActive ? 1 : 0.35
-                            }
-                            stroke={isActive ? "#111827" : "transparent"}
-                            strokeWidth={isActive ? 2 : 0}
+                            key={`c-${i}`}
+                            fill={COLORS[i % COLORS.length]}
+                            fillOpacity={selectedDisease === "All" ? 1 : active ? 1 : 0.2}
+                            stroke={active ? "#111827" : "transparent"}
+                            strokeWidth={active ? 2 : 0}
                           />
                         );
                       })}
                     </Pie>
-                    <Tooltip
-                      formatter={(v) => [`${Number(v).toLocaleString()}`, "Cases"]}
-                    />
+                    <Tooltip formatter={(v) => [Number(v).toLocaleString(), "Predicted"]} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="w-full">
-                <div className="grid gap-2 sm:gap-3">
-                  {displayedDiseaseData.map((d, i) => (
-                    <button
-                      key={d.name}
-                      onClick={() =>
-                        setSelectedDisease((prev) => (prev === d.name ? "All" : d.name))
-                      }
-                      className="flex items-center justify-between rounded-md border px-3 py-2 hover:bg-gray-50 text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="w-3.5 h-3.5 rounded-sm"
-                          style={{ background: COLORS[i % COLORS.length] }}
-                        />
-                        <div className="text-sm font-medium">{d.name}</div>
-                      </div>
-
-                      <div className="text-sm text-gray-800 font-semibold">
-                        {d.value.toLocaleString()}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Population by sex */}
-          <div className="rounded-lg border p-4">
-            <h3 className="font-semibold">Population by Sex</h3>
-            <div className="mt-2 text-sm text-gray-500">January - June 2024</div>
-
-            {/* ✅ mobile stacked */}
-            <div className="mt-4 grid grid-cols-1 gap-4">
-              <div className="w-full h-[220px] flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={populationData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={85}
-                      paddingAngle={4}
-                      labelLine={false}
-                      label={({ name, value }) => `${name} ${value}%`}
-                    >
-                      {populationData.map((_, index) => (
-                        <Cell
-                          key={`cell-pop-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v) => [`${v}%`, "Share"]} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="grid gap-2">
-                {populationData.map((p, i) => (
-                  <div
-                    key={p.name}
-                    className="flex items-center justify-between rounded-md border px-3 py-2"
+              <div className="grid gap-1.5 max-h-64 overflow-auto pr-1">
+                {displayedDiseaseData.map((d, i) => (
+                  <button
+                    key={d.name}
+                    onClick={() => setSelectedDisease((p) => p === d.name ? "All" : d.name)}
+                    className={`flex items-center justify-between rounded-md border px-3 py-2 text-left transition-colors ${
+                      selectedDisease === d.name ? "bg-blue-50 border-blue-300" : "hover:bg-gray-50"
+                    }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span
-                        className="w-3.5 h-3.5 rounded-sm"
+                        className="w-3 h-3 rounded-sm flex-shrink-0"
                         style={{ background: COLORS[i % COLORS.length] }}
                       />
-                      <div className="text-sm font-medium">{p.name}</div>
+                      <span className="text-sm font-medium truncate">{d.name}</span>
                     </div>
-                    <div className="text-sm text-gray-800 font-semibold">
-                      {p.value}%
-                    </div>
-                  </div>
+                    <span className="text-sm font-semibold text-gray-800 ml-2 flex-shrink-0">
+                      {d.value.toLocaleString()}
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Risk factors */}
+        {/* Risk indicators */}
         <div className="rounded-lg border p-4">
-          <h3 className="font-semibold mb-3">Main Risk Factors</h3>
-
-          {/* ✅ taller on mobile + allow long labels */}
-          <div className="h-[320px] sm:h-52">
+          <h3 className="font-semibold mb-3">Outbreak Risk Indicators</h3>
+          <div className="h-[280px] sm:h-52">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={scaledRisk}
-                layout="vertical"
-                margin={{ top: 5, right: 16, left: 12, bottom: 5 }}
+                data={riskFactors} layout="vertical"
+                margin={{ top: 5, right: 20, left: 16, bottom: 5 }}
               >
                 <defs>
                   <linearGradient id="blueGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#2f63fd" />
-                    <stop offset="100%" stopColor="#3B82F6" />
+                    <stop offset="0%"   stopColor="#2f63fd" />
+                    <stop offset="100%" stopColor="#60A5FA" />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={140}
-                  tick={{ fontSize: 11 }}
-                />
-                <Tooltip formatter={(v) => [`${v}%`, "Risk score"]} />
+                <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 10 }} />
+                <Tooltip formatter={(v) => [`${v}%`, "Score"]} />
                 <Bar dataKey="value" radius={[8, 8, 8, 8]} fill="url(#blueGrad)">
-                  <LabelList dataKey="value" position="right" fontSize={11} />
+                  <LabelList dataKey="value" position="right" fontSize={11} formatter={(v) => `${v}%`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+
       </div>
     </section>
   );
