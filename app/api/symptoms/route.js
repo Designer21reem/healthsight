@@ -2,21 +2,6 @@ import OpenAI from "openai";
 
 export const runtime = "nodejs";
 
-export async function POST(req) {
-  try {
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    
-  });
-} catch (err) {
-    return Response.json(
-      { error: String(err?.message || err) },
-      { status: 500 }
-    );
-  }
-}
-
-
 // كلمات نعتبرها "صحية"
 const HEALTH_KEYWORDS = [
   "صداع","تعب","ألم","الم","حمى","حرارة","كحة","سعال","ضيق","نفس",
@@ -29,13 +14,13 @@ function looksHealthRelated(text) {
   return HEALTH_KEYWORDS.some((k) => t.includes(k));
 }
 
-// ✅ Detect Arabic vs English (simple + effective)
+// Detect Arabic vs English
 function detectLang(text) {
-  // If contains Arabic letters => Arabic
   const hasArabic = /[\u0600-\u06FF]/.test(text);
   return hasArabic ? "ar" : "en";
 }
 
+// ✅ POST واحد فقط
 export async function POST(req) {
   try {
     const { message } = await req.json();
@@ -44,9 +29,14 @@ export async function POST(req) {
       return Response.json({ error: "message is required" }, { status: 400 });
     }
 
+    // ✅ هنا ننشئ OpenAI (مهم)
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
     const lang = detectLang(message);
 
-    // 🔒 Gate: إذا السؤال مو صحي، لا ننادي OpenAI
+    // 🔒 Gate
     if (!looksHealthRelated(message)) {
       return Response.json({
         replies: [
@@ -64,7 +54,6 @@ export async function POST(req) {
       });
     }
 
-    // ✅ Language instruction for the model
     const langInstruction =
       lang === "ar"
         ? "You MUST reply in Arabic (Modern Standard Arabic or Iraqi Arabic is ok)."
@@ -116,6 +105,7 @@ Rules:
     }
 
     return Response.json(parsed);
+
   } catch (err) {
     console.error("API error:", err);
     return Response.json(
