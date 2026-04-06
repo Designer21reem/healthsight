@@ -3,10 +3,10 @@ title: Health Backend
 emoji: 🧠
 colorFrom: blue
 colorTo: purple
-sdk: python
-app_file: main.py
-python_version: "3.10"
+sdk: docker
+pinned: false
 ---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 fix deploy
