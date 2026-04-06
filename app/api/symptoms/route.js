@@ -2,9 +2,20 @@ import OpenAI from "openai";
 
 export const runtime = "nodejs";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export async function POST(req) {
+  try {
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    
+  });
+} catch (err) {
+    return Response.json(
+      { error: String(err?.message || err) },
+      { status: 500 }
+    );
+  }
+}
+
 
 // كلمات نعتبرها "صحية"
 const HEALTH_KEYWORDS = [
