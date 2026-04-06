@@ -3,10 +3,11 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ;
 
 // ✅ ياخذ القيم من .envlocal
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+console.log("MAP TOKEN:", process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN);
 
 const COUNTY_COORDS = {
   "Los Angeles":     [-118.2437, 34.0522],
