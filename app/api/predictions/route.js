@@ -1,3 +1,4 @@
+// app/api/predictions/route.js
 export const runtime = "nodejs";
 
 const FASTAPI_URL = process.env.FASTAPI_URL || "http://localhost:8000";
@@ -16,26 +17,30 @@ export async function GET(req) {
       url = `${FASTAPI_URL}/predictions/year/${year}`;
     }
 
+    console.log("Fetching from FastAPI:", url);
     const response = await fetch(url);
 
-    if (!response.ok) throw new Error("FastAPI error");
+    if (!response.ok) {
+      throw new Error(`FastAPI error: ${response.status}`);
+    }
 
     const data = await response.json();
     return Response.json(data);
 
   } catch (err) {
+    console.error("GET /api/predictions error:", err);
     return Response.json(
-      { error: String(err?.message || err) },
+      { error: err?.message || "Internal server error" },
       { status: 500 }
     );
   }
 }
 
-
 export async function POST(req) {
   try {
     const body = await req.json();
 
+    console.log("POST to FastAPI /predict with:", body);
     const response = await fetch(`${FASTAPI_URL}/predict`, {
       method: "POST",
       headers: {
@@ -44,14 +49,17 @@ export async function POST(req) {
       body: JSON.stringify(body),
     });
 
-    if (!response.ok) throw new Error("FastAPI error");
+    if (!response.ok) {
+      throw new Error(`FastAPI error: ${response.status}`);
+    }
 
     const data = await response.json();
     return Response.json(data);
 
   } catch (err) {
+    console.error("POST /api/predictions error:", err);
     return Response.json(
-      { error: String(err?.message || err) },
+      { error: err?.message || "Internal server error" },
       { status: 500 }
     );
   }
