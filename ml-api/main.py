@@ -6,13 +6,13 @@ from model import DiseaseFeatureEngineer, DiseaseModel
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from supabase import create_client
 from dotenv import load_dotenv
 import pandas as pd
 import os
 import asyncio
-from functools import lru_cache
 from typing import Optional
 
 load_dotenv()
@@ -43,7 +43,6 @@ def get_disease_model() -> DiseaseModel:
     """Lazy loader for DiseaseModel - loads only when first needed."""
     global _disease_model
     if _disease_model is None:
-        # Synchronous load (will run in thread pool via async endpoint)
         _disease_model = DiseaseModel("disease_pipeline.pkl")
     return _disease_model
 
@@ -52,7 +51,6 @@ async def get_disease_model_async() -> DiseaseModel:
     """Async wrapper for lazy model loading."""
     async with _model_load_lock:
         if _disease_model is None:
-            # Run the blocking model loading in a thread pool
             loop = asyncio.get_event_loop()
             _disease_model = await loop.run_in_executor(
                 None, lambda: DiseaseModel("disease_pipeline.pkl")
@@ -84,7 +82,7 @@ async def get_stats_async() -> pd.DataFrame:
 
 def calc_zscore(disease: str, rate: float) -> float:
     """Calculate z-score using lazy-loaded stats."""
-    stats = get_stats_sync()  # This will load on first call
+    stats = get_stats_sync()
     match = stats[stats["Disease"] == disease]
     if match.empty:
         return 0.0
@@ -95,6 +93,46 @@ def calc_zscore(disease: str, rate: float) -> float:
 
 def outbreak_from_z(z: float) -> str:
     return "red" if z > 2 else "yellow" if z > 1 else "green"
+
+
+# ── Root Endpoint (fixes 404) ─────────────────────────────────────────────────
+@app.get("/")
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "name": "Disease Prediction API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "GET": {
+                "/": "API information",
+                "/health": "Health check with model status",
+                "/predictions": "Get all predictions (filter by sex)",
+                "/predictions/disease/{disease_name}": "Get predictions by disease",
+                "/predictions/year/{year}": "Get predictions by year",
+                "/predictions/diseases": "Get list of all diseases",
+                "/stats": "Get summary statistics"
+            },
+            "POST": {
+                "/predict": "Make a single prediction",
+                "/load-csv": "Load and process entire CSV file",
+                "/send-alert": "Send outbreak alert to users"
+            }
+        },
+        "docs": "/docs",
+        "redoc": "/redoc"
+    }
+
+
+# ── Health Check Endpoint (very fast, no lazy loading) ──
+@app.get("/health")
+async def health_check():
+    """Simple health check that doesn't trigger lazy loading."""
+    return {
+        "status": "healthy",
+        "model_loaded": _disease_model is not None,
+        "stats_loaded": _df_stats is not None
+    }
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -129,13 +167,6 @@ class AlertInput(BaseModel):
     message: str
 
 
-# ── Health Check Endpoint (very fast, no lazy loading) ──
-@app.get("/health")
-async def health_check():
-    """Simple health check that doesn't trigger lazy loading."""
-    return {"status": "healthy", "model_loaded": _disease_model is not None, "stats_loaded": _df_stats is not None}
-
-
 # ── POST /predict ─────────────────────────────────────────────────────────────
 @app.post("/predict")
 async def predict(data: PredictionInput):
@@ -161,10 +192,8 @@ async def predict(data: PredictionInput):
         )
 
     try:
-        # Lazy load model asynchronously
         disease_model = await get_disease_model_async()
         
-        # Run prediction in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
@@ -213,7 +242,6 @@ async def predict(data: PredictionInput):
             "outbreak_level": level,
         }
         
-        # Run Supabase insert in thread pool
         await loop.run_in_executor(
             None,
             lambda: supabase.table("predictions").upsert(
@@ -237,10 +265,7 @@ async def load_csv():
     runs the model and stores output[1] as predicted_cases.
     """
     try:
-        # Lazy load model asynchronously
         disease_model = await get_disease_model_async()
-        
-        # Load CSV in thread pool
         loop = asyncio.get_event_loop()
         
         def process_csv():
@@ -350,7 +375,7 @@ async def load_csv():
 
 # ── POST /send-alert ──────────────────────────────────────────────────────────
 @app.post("/send-alert")
-def send_alert(data: AlertInput):
+async def send_alert(data: AlertInput):
     """
     1. Logs the alert in alert_logs
     2. Finds all users whose profiles.governorate matches the county
@@ -358,47 +383,49 @@ def send_alert(data: AlertInput):
     Returns count of users notified.
     """
     try:
-        # 1. Log the alert
-        supabase.table("alert_logs").insert({
-            "disease": data.disease,
-            "county": data.county,
-            "year": data.year,
-            "outbreak_level": data.outbreak_level,
-            "message": data.message,
-        }).execute()
-
-        # 2. Find matching users (governorate = county, case-insensitive)
-        profiles_res = (
-            supabase.table("profiles")
-            .select("id, governorate")
-            .ilike("governorate", data.county)
-            .execute()
-        )
-        matched_profiles = profiles_res.data or []
-
-        # 3. Insert notification for each user
-        notifications = [
-            {
-                "user_id": p["id"],
+        loop = asyncio.get_event_loop()
+        
+        def process_alert():
+            supabase.table("alert_logs").insert({
                 "disease": data.disease,
                 "county": data.county,
                 "year": data.year,
                 "outbreak_level": data.outbreak_level,
                 "message": data.message,
-                "is_read": False,
+            }).execute()
+
+            profiles_res = (
+                supabase.table("profiles")
+                .select("id, governorate")
+                .ilike("governorate", data.county)
+                .execute()
+            )
+            matched_profiles = profiles_res.data or []
+
+            notifications = [
+                {
+                    "user_id": p["id"],
+                    "disease": data.disease,
+                    "county": data.county,
+                    "year": data.year,
+                    "outbreak_level": data.outbreak_level,
+                    "message": data.message,
+                    "is_read": False,
+                }
+                for p in matched_profiles
+            ]
+
+            if notifications:
+                supabase.table("user_notifications").insert(notifications).execute()
+
+            return {
+                "status": "sent",
+                "users_notified": len(notifications),
+                "county": data.county,
+                "disease": data.disease,
             }
-            for p in matched_profiles
-        ]
-
-        if notifications:
-            supabase.table("user_notifications").insert(notifications).execute()
-
-        return {
-            "status": "sent",
-            "users_notified": len(notifications),
-            "county": data.county,
-            "disease": data.disease,
-        }
+        
+        return await loop.run_in_executor(None, process_alert)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -406,66 +433,80 @@ def send_alert(data: AlertInput):
 
 # ── GET /predictions ──────────────────────────────────────────────────────────
 @app.get("/predictions")
-def get_predictions(sex: str = "Total"):
+async def get_predictions(sex: str = "Total"):
     try:
-        res = (
-            supabase.table("predictions")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("predictions")
             .select("*")
             .eq("sex", sex)
             .order("year")
             .execute()
         )
-        return res.data
+        return result.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/predictions/disease/{disease_name}")
-def get_by_disease(disease_name: str, sex: str = "Total"):
+async def get_by_disease(disease_name: str, sex: str = "Total"):
     try:
-        res = (
-            supabase.table("predictions")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("predictions")
             .select("*")
             .eq("disease", disease_name)
             .eq("sex", sex)
             .order("year")
             .execute()
         )
-        return res.data
+        return result.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/predictions/year/{year}")
-def get_by_year(year: int, sex: str = "Total"):
+async def get_by_year(year: int, sex: str = "Total"):
     try:
-        res = (
-            supabase.table("predictions")
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("predictions")
             .select("*")
             .eq("year", year)
             .eq("sex", sex)
             .execute()
         )
-        return res.data
+        return result.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/predictions/diseases")
-def get_distinct_diseases():
+async def get_distinct_diseases():
     try:
-        res = supabase.table("predictions").select("disease").execute()
-        diseases = sorted(set(r["disease"] for r in res.data))
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("predictions").select("disease").execute()
+        )
+        diseases = sorted(set(r["disease"] for r in result.data))
         return diseases
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/stats")
-def get_stats_summary(sex: str = "Total"):
+async def get_stats_summary(sex: str = "Total"):
     try:
-        res = supabase.table("predictions").select("*").eq("sex", sex).execute()
-        data = res.data
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("predictions").select("*").eq("sex", sex).execute()
+        )
+        data = result.data
         if not data:
             return {"total": 0}
         df = pd.DataFrame(data)
