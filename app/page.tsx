@@ -5,11 +5,12 @@ import LoginForm from "../components/Auth/LoginForm";
 import RegisterForm from "../components/Auth/RegisterForm";
 
 export default function Page() {
-  const [activeSection, setActiveSection] = useState("hero");
+  // ✅ FIX TYPE
+  const [activeSection, setActiveSection] = useState<string>("hero");
 
-  // ✅ مودلات auth
-  const [openLogin, setOpenLogin] = useState(false);
-  const [openRegister, setOpenRegister] = useState(false);
+  // auth modals
+  const [openLogin, setOpenLogin] = useState<boolean>(false);
+  const [openRegister, setOpenRegister] = useState<boolean>(false);
 
   const openLoginModal = () => {
     setOpenRegister(false);
@@ -67,19 +68,19 @@ export default function Page() {
     },
   };
 
-  const scrollToSection = (sectionId) => {
+  // ✅ FIX الرئيسي هنا (هذا اللي كسر build)
+  const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) element.scrollIntoView({ behavior: "smooth" });
   };
 
-  // refs
-  const missionRef = useRef(null);
-  const featuresRef = useRef(null);
-  const howRef = useRef(null);
-  const testimonialsRef = useRef(null);
-  const ctaRef = useRef(null);
+  // ✅ FIX refs types
+  const missionRef = useRef<HTMLDivElement | null>(null);
+  const featuresRef = useRef<HTMLDivElement | null>(null);
+  const howRef = useRef<HTMLDivElement | null>(null);
+  const testimonialsRef = useRef<HTMLDivElement | null>(null);
+  const ctaRef = useRef<HTMLDivElement | null>(null);
 
-  // inView
   const isMissionInView = useInView(missionRef, { once: true });
   const isFeaturesInView = useInView(featuresRef, { once: true });
   const isHowInView = useInView(howRef, { once: true });
@@ -88,7 +89,6 @@ export default function Page() {
 
   useEffect(() => {
     const handleScroll = () => {
-      // ✅ collab انشال
       const sections = ["hero", "mission", "features", "how", "testimonials", "cta"];
       const current = sections.find((section) => {
         const element = document.getElementById(section);
