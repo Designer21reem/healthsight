@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 // ── Notification bell icon ────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ export default function HeaderUser({
         </div>
       </motion.header>
 
-      {/* Mobile Menu Drawer */}
+      {/* Mobile Menu Drawer - بدون استخدام Menu و X */}
       <AnimatePresence>
         {showMobileMenu && (
           <>
@@ -295,8 +295,8 @@ export default function HeaderUser({
               <div className="flex flex-col h-full">
                 <div className="flex items-center justify-between p-4 border-b border-gray-100">
                   <span className="font-semibold text-gray-900">Account</span>
-                  <button onClick={() => setShowMobileMenu(false)} className="p-1 rounded-lg hover:bg-gray-100">
-                    <X className="w-5 h-5 text-gray-500" />
+                  <button onClick={() => setShowMobileMenu(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500 text-xl">
+                    ✕
                   </button>
                 </div>
                 
