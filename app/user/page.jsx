@@ -7,20 +7,6 @@ import { supabase } from "../../lib/supabaseClient";
 import { HealthService } from "../../lib/healthService";
 import Header from "../../components/Layout/HeaderUser";
 
-// shadcn/ui components
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-
 // recharts components
 import {
   Radar,
@@ -28,12 +14,13 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
+  ResponsiveContainer,
   LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
+  Tooltip,
 } from "recharts";
 
 // Helper function to get last 7 days
@@ -54,21 +41,6 @@ const getLast7Days = () => {
   }
   return days;
 };
-
-// Chart configurations
-const radarChartConfig = {
-  score: {
-    label: "Health Score",
-    color: "#4F46E5",
-  },
-} as const;
-
-const moodChartConfig = {
-  mood: {
-    label: "Mood Score",
-    color: "#F59E0B",
-  },
-} as const;
 
 export default function UserPage() {
   const router = useRouter();
@@ -224,7 +196,6 @@ export default function UserPage() {
   const currentData = getCurrentDayData();
   const getSelectedHealthScore = () => dailyData[selectedDate]?.healthScore ?? 75;
 
-  // Data for Radar Chart
   const radarData = [
     { subject: "Mood", score: currentData.mood * 10, fullMark: 100 },
     { subject: "Sleep", score: currentData.sleep * 10, fullMark: 100 },
@@ -233,7 +204,6 @@ export default function UserPage() {
     { subject: "Exercise", score: Math.min(100, currentData.exercise), fullMark: 100 },
   ];
 
-  // Data for Mood Trend Chart
   const moodData = currentDays.map((day) => ({
     day: day.label,
     fullDay: `${day.month} ${day.day}`,
@@ -241,6 +211,16 @@ export default function UserPage() {
     mood: dailyData[day.date]?.mood ?? 7,
     isToday: day.isToday,
   }));
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-white p-2 border border-gray-200 rounded-lg shadow-sm text-xs">
+        <p className="font-semibold">{label}</p>
+        <p className="text-indigo-600">Mood: {payload[0].value}/10</p>
+      </div>
+    );
+  };
 
   const finishAndSave = async (newAnswers) => {
     try {
@@ -462,20 +442,25 @@ export default function UserPage() {
         </div>
 
         {/* Overall Health Score Card */}
-        <Card className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 border-none shadow-md">
-          <CardHeader className="pb-2">
-            <CardDescription>Overall Health Score — {formatDisplayDate(selectedDate)}</CardDescription>
-            <CardTitle className="text-4xl sm:text-5xl text-green-600">{getSelectedHealthScore()}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-lg font-semibold">
-              {getSelectedHealthScore() >= 90 ? "Excellent" : getSelectedHealthScore() >= 80 ? "Very Good" : getSelectedHealthScore() >= 70 ? "Good" : "Needs Improvement"}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {selectedDate === currentDays[currentDays.length - 1]?.date ? "Based on your daily assessment" : "Historical data"}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="mb-6 p-6 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 shadow-md">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Overall Health Score — {formatDisplayDate(selectedDate)}</p>
+              <p className="text-5xl font-bold text-green-600">{getSelectedHealthScore()}</p>
+              <p className="text-lg font-semibold mt-2">
+                {getSelectedHealthScore() >= 90 ? "Excellent" : getSelectedHealthScore() >= 80 ? "Very Good" : getSelectedHealthScore() >= 70 ? "Good" : "Needs Improvement"}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {selectedDate === currentDays[currentDays.length - 1]?.date ? "Based on your daily assessment" : "Historical data"}
+              </p>
+            </div>
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-green-100 flex items-center justify-center">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M3 12l4 4 8-8 6 6" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+        </div>
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -485,70 +470,57 @@ export default function UserPage() {
             { title: "Energy", value: `${currentData.energy}/10`, color: "from-yellow-400 to-yellow-500", progress: currentData.energy * 10 },
             { title: "Exercise", value: `${currentData.exercise} min`, color: "from-green-400 to-green-500", progress: Math.min(100, (currentData.exercise / 60) * 100) },
           ].map((metric, idx) => (
-            <Card key={idx} className="text-center shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="p-3 sm:p-4">
-                <p className="text-xs sm:text-sm text-gray-500">{metric.title}</p>
-                <p className="text-lg sm:text-xl font-bold mt-1">{metric.value}</p>
-                <div className="w-full h-1.5 bg-gray-200 rounded-full mt-2 overflow-hidden">
-                  <div className={`h-full rounded-full bg-gradient-to-r ${metric.color}`} style={{ width: `${metric.progress}%` }} />
-                </div>
-              </CardContent>
-            </Card>
+            <div key={idx} className="bg-white rounded-xl p-3 sm:p-4 text-center shadow-sm hover:shadow-md transition-shadow">
+              <p className="text-xs sm:text-sm text-gray-500">{metric.title}</p>
+              <p className="text-lg sm:text-xl font-bold mt-1">{metric.value}</p>
+              <div className="w-full h-1.5 bg-gray-200 rounded-full mt-2 overflow-hidden">
+                <div className={`h-full rounded-full bg-gradient-to-r ${metric.color}`} style={{ width: `${metric.progress}%` }} />
+              </div>
+            </div>
           ))}
         </div>
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Radar Chart */}
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>Mental Health Radar</CardTitle>
-              <CardDescription>Your current mental wellness profile</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer config={radarChartConfig} className="mx-auto aspect-square max-h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData}>
-                    <PolarGrid gridType="circle" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#6B7280" }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#9CA3AF" }} />
-                    <Radar dataKey="score" fill="#4F46E5" fillOpacity={0.5} stroke="#4F46E5" strokeWidth={2} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4 shadow-md">
+            <h3 className="font-semibold text-gray-800 mb-1">Mental Health Radar</h3>
+            <p className="text-sm text-gray-500 mb-4">Your current mental wellness profile</p>
+            <div className="w-full h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#6B7280" }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#9CA3AF" }} />
+                  <Radar dataKey="score" fill="#4F46E5" fillOpacity={0.5} stroke="#4F46E5" strokeWidth={2} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
           {/* Mood Trend Line Chart */}
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle>7-Day Mood Trend</CardTitle>
-              <CardDescription>Your mood over the past week</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer config={moodChartConfig} className="h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={moodData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
-                    <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={30} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line type="monotone" dataKey="mood" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 4, fill: "#F59E0B" }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4 shadow-md">
+            <h3 className="font-semibold text-gray-800 mb-1">7-Day Mood Trend</h3>
+            <p className="text-sm text-gray-500 mb-4">Your mood over the past week</p>
+            <div className="w-full h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={moodData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={30} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Line type="monotone" dataKey="mood" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 4, fill: "#F59E0B" }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
 
         {/* Habits Tracker */}
-        <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle>Daily Habits Tracker</CardTitle>
-            <CardDescription>Monitor your physical health habits</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="bg-white rounded-xl p-4 shadow-md">
+          <h3 className="font-semibold text-gray-800 mb-1">Daily Habits Tracker</h3>
+          <p className="text-sm text-gray-500 mb-4">Monitor your physical health habits</p>
+          <div className="space-y-4">
             {[
               { name: "Water Intake", value: `${currentData.water} glasses`, goal: "10 glasses/day", percent: Math.min(100, (currentData.water / 10) * 100), color: "from-blue-400 to-blue-500" },
               { name: "Exercise", value: `${currentData.exercise} min`, goal: "60 min/day", percent: Math.min(100, (currentData.exercise / 60) * 100), color: "from-green-400 to-green-500" },
@@ -565,8 +537,8 @@ export default function UserPage() {
                 </div>
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </main>
     </div>
   );
