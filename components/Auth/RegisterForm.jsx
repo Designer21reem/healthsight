@@ -4,77 +4,29 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../../lib/supabaseClient";
 
-// California counties — same list used in the disease dataset & MapPanel
+// California counties list
 const CALIFORNIA_COUNTIES = [
-  "Alameda",
-  "Alpine",
-  "Amador",
-  "Butte",
-  "Calaveras",
-  "Colusa",
-  "Contra Costa",
-  "Del Norte",
-  "El Dorado",
-  "Fresno",
-  "Glenn",
-  "Humboldt",
-  "Imperial",
-  "Inyo",
-  "Kern",
-  "Kings",
-  "Lake",
-  "Lassen",
-  "Los Angeles",
-  "Madera",
-  "Marin",
-  "Mariposa",
-  "Mendocino",
-  "Merced",
-  "Modoc",
-  "Mono",
-  "Monterey",
-  "Napa",
-  "Nevada",
-  "Orange",
-  "Placer",
-  "Plumas",
-  "Riverside",
-  "Sacramento",
-  "San Benito",
-  "San Bernardino",
-  "San Diego",
-  "San Francisco",
-  "San Joaquin",
-  "San Luis Obispo",
-  "San Mateo",
-  "Santa Barbara",
-  "Santa Clara",
-  "Shasta",
-  "Sierra",
-  "Siskiyou",
-  "Solano",
-  "Sonoma",
-  "Stanislaus",
-  "Sutter",
-  "Tehama",
-  "Trinity",
-  "Tulare",
-  "Tuolumne",
-  "Ventura",
-  "Yolo",
-  "Yuba",
+  "Alameda", "Alpine", "Amador", "Butte", "Calaveras", "Colusa", "Contra Costa",
+  "Del Norte", "El Dorado", "Fresno", "Glenn", "Humboldt", "Imperial", "Inyo",
+  "Kern", "Kings", "Lake", "Lassen", "Los Angeles", "Madera", "Marin", "Mariposa",
+  "Mendocino", "Merced", "Modoc", "Mono", "Monterey", "Napa", "Nevada", "Orange",
+  "Placer", "Plumas", "Riverside", "Sacramento", "San Benito", "San Bernardino",
+  "San Diego", "San Francisco", "San Joaquin", "San Luis Obispo", "San Mateo",
+  "Santa Barbara", "Santa Clara", "Shasta", "Sierra", "Siskiyou", "Solano",
+  "Sonoma", "Stanislaus", "Sutter", "Tehama", "Trinity", "Tulare", "Tuolumne",
+  "Ventura", "Yolo", "Yuba",
 ];
 
 export default function RegisterForm({ open, onClose, onShowLogin }) {
   const [mounted, setMounted] = useState(false);
 
-  const [fullName,    setFullName]    = useState("");
+  const [fullName, setFullName] = useState("");
   const [governorate, setGovernorate] = useState("");
-  const [email,       setEmail]       = useState("");
-  const [password,    setPassword]    = useState("");
-  const [confirm,     setConfirm]     = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
 
-  const [error,   setError]   = useState("");
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -91,11 +43,12 @@ export default function RegisterForm({ open, onClose, onShowLogin }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError(""); setSuccess("");
+    setError("");
+    setSuccess("");
     setLoading(true);
 
-    const cleanName     = fullName.trim();
-    const cleanEmail    = email.trim();
+    const cleanName = fullName.trim();
+    const cleanEmail = email.trim();
     const cleanPassword = password.trim();
 
     if (!cleanName || !cleanEmail || !cleanPassword || !confirm || !governorate) {
@@ -103,11 +56,13 @@ export default function RegisterForm({ open, onClose, onShowLogin }) {
       setLoading(false);
       return;
     }
+    
     if (cleanPassword.length < 6) {
       setError("Password must be at least 6 characters long.");
       setLoading(false);
       return;
     }
+    
     if (cleanPassword !== confirm) {
       setError("Passwords do not match.");
       setLoading(false);
@@ -115,23 +70,21 @@ export default function RegisterForm({ open, onClose, onShowLogin }) {
     }
 
     try {
-      // 1. Create auth user
+      // Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email:    cleanEmail,
+        email: cleanEmail,
         password: cleanPassword,
-        options:  {
-          data: { full_name: cleanName, governorate },
+        options: {
+          data: { 
+            full_name: cleanName, 
+            governorate 
+          },
         },
       });
 
       if (authError) {
-        if (
-          authError.message?.includes("already registered") ||
-          authError.code === "user_already_exists"
-        ) {
+        if (authError.message?.includes("already registered")) {
           setError("This email is already registered. Try logging in.");
-        } else if (authError.message?.toLowerCase()?.includes("email")) {
-          setError("Email confirmation required. Check your inbox.");
         } else {
           setError(authError.message || "Registration failed. Please try again.");
         }
@@ -139,39 +92,38 @@ export default function RegisterForm({ open, onClose, onShowLogin }) {
         return;
       }
 
-      if (!authData?.user) {
-        setError("Registration failed. Please try again.");
-        setLoading(false);
-        return;
+      if (authData?.user) {
+        // Create profile in database
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .upsert({
+            id: authData.user.id,
+            email: cleanEmail,
+            full_name: cleanName,
+            governorate: governorate,
+            role: "user",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "id" });
+
+        if (profileError) {
+          console.error("Profile creation error:", profileError);
+        }
+
+        setSuccess("Account created successfully! You can now log in.");
+        
+        // Clear form
+        setFullName("");
+        setEmail("");
+        setPassword("");
+        setConfirm("");
+        setGovernorate("");
+
+        // Switch to login after delay
+        setTimeout(() => {
+          onShowLogin?.();
+        }, 2000);
       }
-
-      // 2. Save profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .upsert(
-          [{
-            id:          authData.user.id,
-            email:       cleanEmail,
-            full_name:   cleanName,
-            governorate,
-            role:        "user",
-            updated_at:  new Date().toISOString(),
-          }],
-          { onConflict: "id" }
-        );
-
-      if (profileError) console.error("Profile upsert error:", profileError);
-
-      // 3. Success
-      if (!authData.user.email_confirmed && authData.session === null) {
-        setSuccess("Account created! Check your email to confirm your account.");
-      } else {
-        setSuccess("Account created! You can now log in.");
-      }
-
-      setFullName(""); setEmail(""); setPassword(""); setConfirm(""); setGovernorate("");
-
-      setTimeout(() => { onShowLogin?.(); }, 1200);
     } catch (err) {
       console.error(err);
       setError(err.message || "An unexpected error occurred.");
@@ -205,14 +157,13 @@ export default function RegisterForm({ open, onClose, onShowLogin }) {
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error   && (
+          {error && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
           )}
           {success && (
             <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">{success}</div>
           )}
 
-          {/* Name + County */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="mb-2 block text-sm text-gray-600">
@@ -248,7 +199,6 @@ export default function RegisterForm({ open, onClose, onShowLogin }) {
             </div>
           </div>
 
-          {/* Email */}
           <div>
             <label className="mb-2 block text-sm text-gray-600">
               Email <span className="text-red-500">*</span>
@@ -265,7 +215,6 @@ export default function RegisterForm({ open, onClose, onShowLogin }) {
             />
           </div>
 
-          {/* Password + Confirm */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="mb-2 block text-sm text-gray-600">

@@ -15,7 +15,6 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
 
   useEffect(() => {
     setMounted(true);
-    console.log("LoginForm mounted");
   }, []);
 
   useEffect(() => {
@@ -32,15 +31,11 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    console.log("Form submitted");
     setError("");
     setLoading(true);
 
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
-
-    console.log("Email:", cleanEmail);
-    console.log("Password length:", cleanPassword.length);
 
     if (!cleanEmail || !cleanPassword) {
       setError("Please fill in all fields.");
@@ -49,18 +44,21 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
     }
 
     try {
-      console.log("Attempting to sign in with Supabase...");
-      console.log("Supabase URL exists:", !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-      
+      // Clean any stale locks before login attempt
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (supabaseUrl) {
+          const lockKey = `sb-${supabaseUrl.replace(/https?:\/\//, '').replace(/\./g, '-')}-auth-token`;
+          localStorage.removeItem(lockKey);
+        }
+      } catch(e) {}
+
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
       });
 
-      console.log("Auth response:", { authData, authError });
-
       if (authError) {
-        console.error("Auth error:", authError);
         if (authError.message?.includes("Invalid login credentials")) {
           setError("Invalid email or password.");
         } else if (authError.message?.includes("Email not confirmed")) {
@@ -75,42 +73,56 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
       }
 
       if (authData?.user) {
-        console.log("User authenticated:", authData.user.id);
-        
         let userRole = "user";
+        
         try {
-          console.log("Fetching user role...");
+          // Try to get profile
           const { data: profileData, error: profileError } = await supabase
             .from("profiles")
             .select("role")
             .eq("id", authData.user.id)
-            .single();
-
-          console.log("Profile data:", profileData);
-          if (profileError) console.error("Profile error:", profileError);
+            .maybeSingle();
           
-          userRole = profileData?.role || "user";
+          if (profileError) {
+            console.error("Profile fetch error:", profileError);
+          }
+          
+          if (profileData?.role) {
+            userRole = profileData.role;
+          } else {
+            // Create profile if doesn't exist
+            const { error: insertError } = await supabase
+              .from("profiles")
+              .insert({
+                id: authData.user.id,
+                email: authData.user.email,
+                full_name: authData.user.user_metadata?.full_name || authData.user.email?.split('@')[0] || "User",
+                role: "user",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+            
+            if (insertError) {
+              console.error("Profile creation error:", insertError);
+            }
+          }
         } catch (err) {
-          console.error("Role fetch error:", err);
-          userRole = "user";
+          console.error("Profile handling error:", err);
         }
 
-        console.log("User role:", userRole);
-        
         setEmail("");
         setPassword("");
         onClose?.();
 
         const redirectPath = userRole === "admin" ? "/admin" : "/user";
-        console.log("Redirecting to:", redirectPath);
         
         setTimeout(() => {
           router.push(redirectPath);
           router.refresh();
-        }, 50);
+        }, 100);
       }
     } catch (err) {
-      console.error("Unexpected error:", err);
+      console.error("Login error:", err);
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);

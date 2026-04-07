@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -14,49 +15,48 @@ export default function UserPage() {
   const router = useRouter();
   const daysRowRef = useRef(null);
 
-  const [user, setUser]                 = useState(null);
-  const [profile, setProfile]           = useState(null);
-  const [loading, setLoading]           = useState(true);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  const [showQuestions, setShowQuestions]   = useState(true);
+  const [showQuestions, setShowQuestions] = useState(true);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers]               = useState({});
+  const [answers, setAnswers] = useState({});
 
   const [selectedDate, setSelectedDate] = useState(null);
-  const [dailyData, setDailyData]       = useState({});
-  const [currentDays, setCurrentDays]   = useState([]);
+  const [dailyData, setDailyData] = useState({});
+  const [currentDays, setCurrentDays] = useState([]);
 
-  const presenceIntervalRef    = useRef(null);
-  const isPresenceStartedRef   = useRef(false);
+  const presenceIntervalRef = useRef(null);
+  const isPresenceStartedRef = useRef(false);
   const beforeUnloadHandlerRef = useRef(null);
 
-  // ── helpers ───────────────────────────────────────────────────────────────
   const getLast7Days = () => {
-    const days  = [];
+    const days = [];
     const today = new Date();
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
       date.setDate(today.getDate() - i);
       days.push({
-        date:        date.toISOString().split("T")[0],
-        day:         date.getDate(),
-        label:       date.toLocaleDateString("en-US", { weekday: "short" }),
-        month:       date.toLocaleDateString("en-US", { month: "short" }),
-        isToday:     i === 0,
+        date: date.toISOString().split("T")[0],
+        day: date.getDate(),
+        label: date.toLocaleDateString("en-US", { weekday: "short" }),
+        month: date.toLocaleDateString("en-US", { month: "short" }),
+        isToday: i === 0,
         isYesterday: i === 1,
-        fullDate:    date,
+        fullDate: date,
       });
     }
     return days;
   };
 
   const formatDisplayDate = (dateStr) => {
-    const date      = new Date(dateStr);
-    const today     = new Date();
+    const date = new Date(dateStr);
+    const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
-    if (date.toDateString() === today.toDateString())     return "Today";
+    if (date.toDateString() === today.toDateString()) return "Today";
     if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
     return date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   };
@@ -66,7 +66,6 @@ export default function UserPage() {
     return d.toLocaleString(undefined, { month: "long", year: "numeric" });
   };
 
-  // ── presence ──────────────────────────────────────────────────────────────
   const upsertPresence = async (_ignored, isOnline, opts = {}) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -101,29 +100,44 @@ export default function UserPage() {
     finally { isPresenceStartedRef.current = false; }
   };
 
-  // ── init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     initializePage();
     return () => { if (user?.id) stopPresenceHeartbeat(user.id); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function initializePage() {
     try {
       setLoading(true);
+      
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) { router.push("/"); return; }
+      
+      if (sessionError || !session) { 
+        router.push("/"); 
+        return; 
+      }
+      
       setUser(session.user);
 
-      const { data: profileData } = await supabase
-        .from("profiles").select("*").eq("id", session.user.id).single();
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      
+      if (profileError) {
+        console.error("Profile fetch error:", profileError);
+      }
+      
       setProfile(profileData || null);
 
-      if (profileData?.role === "admin") { router.push("/admin"); return; }
+      if (profileData?.role === "admin") { 
+        router.push("/admin"); 
+        return; 
+      }
 
       await startPresenceHeartbeat(session.user.id);
 
-      const days  = getLast7Days();
+      const days = getLast7Days();
       const today = days[days.length - 1].date;
       setCurrentDays(days);
       setSelectedDate(today);
@@ -145,14 +159,14 @@ export default function UserPage() {
       const newDailyData = {};
       logs.forEach((log) => {
         newDailyData[log.log_date] = {
-          mood:        log.mood_score      ?? 7,
-          sleep:       log.sleep_score     ?? 7,
-          energy:      log.energy_score    ?? 7,
-          nutrition:   log.nutrition_score ?? 7,
-          exercise:    log.exercise_minutes ?? 35,
-          healthScore: log.overall_score   ?? 75,
-          water:       log.water_glasses   ?? 8,
-          meals:       log.meals_count     ?? 3,
+          mood: log.mood_score ?? 7,
+          sleep: log.sleep_score ?? 7,
+          energy: log.energy_score ?? 7,
+          nutrition: log.nutrition_score ?? 7,
+          exercise: log.exercise_minutes ?? 35,
+          healthScore: log.overall_score ?? 75,
+          water: log.water_glasses ?? 8,
+          meals: log.meals_count ?? 3,
         };
       });
       days.forEach((day) => {
@@ -163,7 +177,6 @@ export default function UserPage() {
     } catch (err) { console.error("Error loading database data:", err); }
   }
 
-  // ── logout ────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     if (logoutLoading) return;
     setLogoutLoading(true);
@@ -174,15 +187,14 @@ export default function UserPage() {
     finally { router.push("/"); }
   };
 
-  // ── questions ─────────────────────────────────────────────────────────────
   const questions = [
-    { id:1, question:"How are you feeling today?",              type:"mood",      options:[{emoji:"😢",text:"Bad",value:3},{emoji:"😐",text:"Okay",value:6},{emoji:"😊",text:"Good",value:8},{emoji:"🤩",text:"Excellent",value:10}] },
-    { id:2, question:"How was your sleep quality?",             type:"sleep",     options:[{emoji:"😴",text:"Poor",value:4},{emoji:"🛌",text:"Average",value:7},{emoji:"💤",text:"Good",value:9},{emoji:"🌟",text:"Excellent",value:10}] },
-    { id:3, question:"What's your energy level today?",         type:"energy",    options:[{emoji:"😫",text:"Low",value:4},{emoji:"😌",text:"Medium",value:7},{emoji:"💪",text:"Good",value:9},{emoji:"⚡️",text:"High",value:10}] },
-    { id:4, question:"How many minutes did you exercise today?",type:"exercise",  options:[{emoji:"🚶",text:"0-15 min",value:15},{emoji:"🏃",text:"16-30 min",value:30},{emoji:"💪",text:"31-45 min",value:45},{emoji:"🔥",text:"45+ min",value:60}] },
-    { id:5, question:"How was your food intake today?",          type:"nutrition", options:[{emoji:"🍔",text:"Unhealthy",value:4},{emoji:"🥗",text:"Average",value:7},{emoji:"🍎",text:"Healthy",value:9},{emoji:"🌈",text:"Excellent",value:10}] },
-    { id:6, question:"How many glasses of water did you drink?",type:"water",     options:[{emoji:"🥤",text:"0-3",value:3},{emoji:"💧",text:"4-6",value:6},{emoji:"🚰",text:"7-9",value:9},{emoji:"🌊",text:"10+",value:10}] },
-    { id:7, question:"How many meals did you have today?",      type:"meals",     options:[{emoji:"🍽️",text:"1 meal",value:1},{emoji:"🥪",text:"2 meals",value:2},{emoji:"🍛",text:"3 meals",value:3},{emoji:"🍱",text:"4+ meals",value:4}] },
+    { id:1, question:"How are you feeling today?", type:"mood", options:[{emoji:"😢",text:"Bad",value:3},{emoji:"😐",text:"Okay",value:6},{emoji:"😊",text:"Good",value:8},{emoji:"🤩",text:"Excellent",value:10}] },
+    { id:2, question:"How was your sleep quality?", type:"sleep", options:[{emoji:"😴",text:"Poor",value:4},{emoji:"🛌",text:"Average",value:7},{emoji:"💤",text:"Good",value:9},{emoji:"🌟",text:"Excellent",value:10}] },
+    { id:3, question:"What's your energy level today?", type:"energy", options:[{emoji:"😫",text:"Low",value:4},{emoji:"😌",text:"Medium",value:7},{emoji:"💪",text:"Good",value:9},{emoji:"⚡️",text:"High",value:10}] },
+    { id:4, question:"How many minutes did you exercise today?", type:"exercise", options:[{emoji:"🚶",text:"0-15 min",value:15},{emoji:"🏃",text:"16-30 min",value:30},{emoji:"💪",text:"31-45 min",value:45},{emoji:"🔥",text:"45+ min",value:60}] },
+    { id:5, question:"How was your food intake today?", type:"nutrition", options:[{emoji:"🍔",text:"Unhealthy",value:4},{emoji:"🥗",text:"Average",value:7},{emoji:"🍎",text:"Healthy",value:9},{emoji:"🌈",text:"Excellent",value:10}] },
+    { id:6, question:"How many glasses of water did you drink?", type:"water", options:[{emoji:"🥤",text:"0-3",value:3},{emoji:"💧",text:"4-6",value:6},{emoji:"🚰",text:"7-9",value:9},{emoji:"🌊",text:"10+",value:10}] },
+    { id:7, question:"How many meals did you have today?", type:"meals", options:[{emoji:"🍽️",text:"1 meal",value:1},{emoji:"🥪",text:"2 meals",value:2},{emoji:"🍛",text:"3 meals",value:3},{emoji:"🍱",text:"4+ meals",value:4}] },
   ];
 
   const getCurrentDayData = () => dailyData[selectedDate] || { mood:7,sleep:7,energy:7,nutrition:7,exercise:35,healthScore:75,water:8,meals:3 };
@@ -190,23 +202,23 @@ export default function UserPage() {
   const getSelectedHealthScore = () => dailyData[selectedDate]?.healthScore ?? 75;
 
   const radarData = [
-    { subject:"Mood",      A: currentData.mood * 10,  fullMark:100 },
-    { subject:"Sleep",     A: currentData.sleep * 10, fullMark:100 },
-    { subject:"Energy",    A: currentData.energy * 10,fullMark:100 },
-    { subject:"Nutrition", A: currentData.nutrition*10,fullMark:100},
-    { subject:"Exercise",  A: currentData.exercise,   fullMark:100 },
+    { subject:"Mood", A: currentData.mood * 10, fullMark:100 },
+    { subject:"Sleep", A: currentData.sleep * 10, fullMark:100 },
+    { subject:"Energy", A: currentData.energy * 10, fullMark:100 },
+    { subject:"Nutrition", A: currentData.nutrition * 10, fullMark:100 },
+    { subject:"Exercise", A: currentData.exercise, fullMark:100 },
   ];
 
   const moodData = currentDays.map((day) => ({
-    day:     `${day.month} ${day.day}`,
-    date:    day.date,
-    mood:    dailyData[day.date]?.mood ?? 7,
+    day: `${day.month} ${day.day}`,
+    date: day.date,
+    mood: dailyData[day.date]?.mood ?? 7,
     isToday: day.isToday,
   }));
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
-    const found  = moodData.find((d) => d.day === label);
+    const found = moodData.find((d) => d.day === label);
     const dayData = found ? dailyData[found.date] : null;
     return (
       <motion.div initial={{ opacity:0, scale:0.8 }} animate={{ opacity:1, scale:1 }}
@@ -225,20 +237,20 @@ export default function UserPage() {
   };
 
   const containerVariants = { hidden:{ opacity:0 }, visible:{ opacity:1, transition:{ staggerChildren:0.1 } } };
-  const itemVariants      = { hidden:{ opacity:0, y:20 }, visible:{ opacity:1, y:0, transition:{ duration:0.5 } } };
-  const cardVariants      = { hidden:{ opacity:0, scale:0.8 }, visible:{ opacity:1, scale:1, transition:{ duration:0.4 } }, hover:{ scale:1.02, transition:{ duration:0.2 } } };
+  const itemVariants = { hidden:{ opacity:0, y:20 }, visible:{ opacity:1, y:0, transition:{ duration:0.5 } } };
+  const cardVariants = { hidden:{ opacity:0, scale:0.8 }, visible:{ opacity:1, scale:1, transition:{ duration:0.4 } }, hover:{ scale:1.02, transition:{ duration:0.2 } } };
 
   const finishAndSave = async (newAnswers) => {
     try {
       setLoading(true);
       await HealthService.saveDailyLog(user.id, {
-        mood:      Number(newAnswers.mood      || 7),
-        sleep:     Number(newAnswers.sleep     || 7),
-        energy:    Number(newAnswers.energy    || 7),
-        exercise:  Number(newAnswers.exercise  || 0),
+        mood: Number(newAnswers.mood || 7),
+        sleep: Number(newAnswers.sleep || 7),
+        energy: Number(newAnswers.energy || 7),
+        exercise: Number(newAnswers.exercise || 0),
         nutrition: Number(newAnswers.nutrition || 7),
-        water:     newAnswers.water === 10 ? 10 : Number(newAnswers.water || 0),
-        meals:     Number(newAnswers.meals || 0) >= 4 ? 4 : Number(newAnswers.meals || 0),
+        water: newAnswers.water === 10 ? 10 : Number(newAnswers.water || 0),
+        meals: Number(newAnswers.meals || 0) >= 4 ? 4 : Number(newAnswers.meals || 0),
       });
       const days = getLast7Days();
       setCurrentDays(days);
@@ -260,7 +272,6 @@ export default function UserPage() {
     else await finishAndSave(newAnswers);
   };
 
-  // ── Loading overlay ───────────────────────────────────────────────────────
   const LoadingOverlay = () => (
     <AnimatePresence>
       {(loading || logoutLoading) && (
@@ -284,7 +295,6 @@ export default function UserPage() {
     </AnimatePresence>
   );
 
-  // ── Questions screen ──────────────────────────────────────────────────────
   if (showQuestions) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
@@ -336,12 +346,10 @@ export default function UserPage() {
     );
   }
 
-  // ── Main dashboard ────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-white text-slate-900 antialiased">
       <LoadingOverlay />
 
-      {/* Shared header */}
       <Header
         profile={profile}
         user={user}
@@ -358,7 +366,6 @@ export default function UserPage() {
           <div className="text-sm text-gray-500">{formatMonthYear(selectedDate || new Date().toISOString())}</div>
         </motion.div>
 
-        {/* Days row */}
         <motion.div ref={daysRowRef} tabIndex={0} role="listbox" aria-label="Select day"
           variants={containerVariants} initial="hidden" animate="visible"
           onKeyDown={(e) => {
@@ -386,7 +393,6 @@ export default function UserPage() {
 
         <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 gap-6 md:grid-cols-12">
 
-          {/* Overall Score */}
           <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 bg-blue-50 rounded-xl p-6 shadow-sm mb-6">
             <div className="flex items-start justify-between">
               <div>
@@ -414,17 +420,15 @@ export default function UserPage() {
             </div>
           </motion.section>
 
-          {/* Metrics */}
           <motion.section variants={cardVariants} className="md:col-span-12 bg-white rounded-xl p-6 shadow-sm">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Metric title="Mood"     value={`${currentData.mood}/10`}     color="bg-pink-500"   progress={currentData.mood * 10} />
-              <Metric title="Sleep"    value={`${currentData.sleep}/10`}    color="bg-blue-500"   progress={currentData.sleep * 10} />
-              <Metric title="Energy"   value={`${currentData.energy}/10`}   color="bg-yellow-500" progress={currentData.energy * 10} />
+              <Metric title="Mood" value={`${currentData.mood}/10`} color="bg-pink-500" progress={currentData.mood * 10} />
+              <Metric title="Sleep" value={`${currentData.sleep}/10`} color="bg-blue-500" progress={currentData.sleep * 10} />
+              <Metric title="Energy" value={`${currentData.energy}/10`} color="bg-yellow-500" progress={currentData.energy * 10} />
               <Metric title="Exercise" value={`${currentData.exercise} min`} color="bg-green-500" progress={Math.min(100,(Number(currentData.exercise||0)/60)*100)} />
             </div>
           </motion.section>
 
-          {/* Radar */}
           <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-4 bg-white rounded-xl p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-2">Mental Health Radar</h3>
             <p className="text-sm text-gray-500 mb-4">Your current mental wellness profile</p>
@@ -440,7 +444,6 @@ export default function UserPage() {
             </div>
           </motion.section>
 
-          {/* Line chart */}
           <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-5 bg-white rounded-xl p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-2">7-Day Mood Trend</h3>
             <p className="text-sm text-gray-500 mb-4">Your mood over the past week</p>
@@ -459,13 +462,12 @@ export default function UserPage() {
             </div>
           </motion.section>
 
-          {/* Habits */}
           <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-3 bg-white rounded-xl p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-2">Daily Habits Tracker</h3>
             <p className="text-sm text-gray-500 mb-4">Monitor your physical health habits</p>
-            <Habit name="Water Intake" value={`${currentData.water} glasses`} goal="10 glasses/day" color="bg-blue-500"   percent={Math.min(100,(Number(currentData.water||0)/10)*100)} />
-            <Habit name="Exercise"     value={`${currentData.exercise} min`}  goal="60 min/day"     color="bg-green-500"  percent={Math.min(100,(Number(currentData.exercise||0)/60)*100)} />
-            <Habit name="Meals"        value={`${currentData.meals} meals`}   goal="4 meals/day"    color="bg-orange-500" percent={Math.min(100,(Number(currentData.meals||0)/4)*100)} />
+            <Habit name="Water Intake" value={`${currentData.water} glasses`} goal="10 glasses/day" color="bg-blue-500" percent={Math.min(100,(Number(currentData.water||0)/10)*100)} />
+            <Habit name="Exercise" value={`${currentData.exercise} min`} goal="60 min/day" color="bg-green-500" percent={Math.min(100,(Number(currentData.exercise||0)/60)*100)} />
+            <Habit name="Meals" value={`${currentData.meals} meals`} goal="4 meals/day" color="bg-orange-500" percent={Math.min(100,(Number(currentData.meals||0)/4)*100)} />
           </motion.section>
         </motion.div>
       </main>
