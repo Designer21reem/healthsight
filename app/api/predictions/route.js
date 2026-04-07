@@ -1,7 +1,8 @@
 // app/api/predictions/route.js
 export const runtime = "nodejs";
 
-const FASTAPI_URL = process.env.FASTAPI_URL || "http://localhost:8000";
+// استخدم نفس المتغير الموجود في .env.local
+const FASTAPI_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function GET(req) {
   try {
