@@ -409,7 +409,7 @@ export default function UserPage() {
             title="AI Assistant"
           >
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 animate-pulse" />
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none">
               <rect x="5" y="8" width="14" height="10" rx="2" fill="white" stroke="white" strokeWidth="1.2" />
               <circle cx="9.5" cy="12.5" r="1" fill="#6366F1" />
               <circle cx="14.5" cy="12.5" r="1" fill="#6366F1" />
