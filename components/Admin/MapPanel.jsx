@@ -671,7 +671,7 @@ export default function MapPanel() {
                   <option value={4}>4×</option>
                 </select>
               </div>
-              <div className="text-sm text-gray-600 sm:ml-auto">
+              <div className="text-sm mt-1.5 sm:mt-0  text-gray-600 sm:ml-auto">
                 Year: <span className="font-semibold">{timeSteps[timeIndex] || "—"}</span>
               </div>
             </div>

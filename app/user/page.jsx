@@ -504,7 +504,7 @@ export default function UserPage() {
             <p className="text-sm text-gray-500 mb-4">Your mood over the past week</p>
             <div className="w-full h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={moodData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={moodData} margin={{ top: 10, right: 10, left: -8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={30} />

@@ -51,7 +51,6 @@ export default function AnalysisPanel() {
   const [selectedDisease, setSelectedDisease] = useState("All");
   const [viewYears, setViewYears]             = useState(14);
 
-  // Main data: Total sex (for all charts except the sex breakdown chart)
   const totalUrl =
     selectedDisease === "All"
       ? `${API_BASE}/predictions?sex=Total`
@@ -59,23 +58,19 @@ export default function AnalysisPanel() {
 
   const { data: predictions, loading, error, refetch } = useFetch(totalUrl);
 
-  // Female data (for sex chart)
   const femaleUrl =
     selectedDisease === "All"
       ? `${API_BASE}/predictions?sex=Female`
       : `${API_BASE}/predictions/disease/${encodeURIComponent(selectedDisease)}?sex=Female`;
-
   const { data: femaleData } = useFetch(femaleUrl);
 
-  // Male data (for sex chart)
   const maleUrl =
     selectedDisease === "All"
       ? `${API_BASE}/predictions?sex=Male`
       : `${API_BASE}/predictions/disease/${encodeURIComponent(selectedDisease)}?sex=Male`;
-
   const { data: maleData } = useFetch(maleUrl);
 
-  // ── Diseases from DB (dynamic) ────────────────────────────────────────────
+  // ── Diseases from DB ──────────────────────────────────────────────────────
   const diseasesInDB = useMemo(
     () => [...new Set(predictions.map((r) => r.disease))].sort(),
     [predictions]
@@ -116,7 +111,22 @@ export default function AnalysisPanel() {
     [rowsInView, filteredYears]
   );
 
-  // ── Disease distribution (from DB) ────────────────────────────────────────
+  // FIX 1: limit XAxis to show at most 4 evenly-spaced year ticks
+  const xAxisTicks = useMemo(() => {
+    if (filteredYears.length <= 4) return filteredYears;
+    const step = Math.ceil((filteredYears.length - 1) / 3);
+    const ticks = [];
+    for (let i = 0; i < filteredYears.length; i += step) {
+      ticks.push(filteredYears[i]);
+    }
+    // Always include the last year
+    if (ticks[ticks.length - 1] !== filteredYears[filteredYears.length - 1]) {
+      ticks.push(filteredYears[filteredYears.length - 1]);
+    }
+    return ticks;
+  }, [filteredYears]);
+
+  // ── Disease distribution ──────────────────────────────────────────────────
   const diseaseData = useMemo(
     () =>
       diseasesInDB
@@ -146,7 +156,7 @@ export default function AnalysisPanel() {
     [diseaseData, selectedDisease]
   );
 
-  // ── Sex breakdown chart — Female vs Male per year ─────────────────────────
+  // ── Sex breakdown ─────────────────────────────────────────────────────────
   const sexChartData = useMemo(() => {
     return filteredYears.map((year) => {
       const fRows = femaleData.filter(
@@ -164,29 +174,30 @@ export default function AnalysisPanel() {
   }, [femaleData, maleData, filteredYears, selectedDisease]);
 
   // ── Risk indicators ───────────────────────────────────────────────────────
+  // FIX 3: shorter label names so YAxis doesn't eat too much horizontal space
   const riskFactors = useMemo(() => {
     if (!rowsInView.length)
       return [
-        { name: "Outbreak Risk (avg z-score)", value: 0 },
-        { name: "High-level outbreaks",         value: 0 },
-        { name: "Moderate outbreaks",            value: 0 },
-        { name: "Normal level",                  value: 0 },
-        { name: "Records with prediction",       value: 0 },
+        { name: "Outbreak Risk", value: 0 },
+        { name: "High outbreaks", value: 0 },
+        { name: "Moderate outbreaks", value: 0 },
+        { name: "Normal level", value: 0 },
+        { name: "With prediction", value: 0 },
       ];
 
-    const n      = rowsInView.length;
-    const avgZ   = rowsInView.reduce((s, r) => s + Math.abs(r.zscore || 0), 0) / n;
-    const redPct = Math.round((rowsInView.filter((r) => r.outbreak_level === "red").length    / n) * 100);
-    const yPct   = Math.round((rowsInView.filter((r) => r.outbreak_level === "yellow").length / n) * 100);
-    const gPct   = Math.max(0, 100 - redPct - yPct);
+    const n       = rowsInView.length;
+    const avgZ    = rowsInView.reduce((s, r) => s + Math.abs(r.zscore || 0), 0) / n;
+    const redPct  = Math.round((rowsInView.filter((r) => r.outbreak_level === "red").length    / n) * 100);
+    const yPct    = Math.round((rowsInView.filter((r) => r.outbreak_level === "yellow").length / n) * 100);
+    const gPct    = Math.max(0, 100 - redPct - yPct);
     const hasPred = rowsInView.filter((r) => (r.predicted_cases || 0) > 0).length;
 
     return [
-      { name: "Outbreak Risk (avg z-score)", value: Math.min(100, Math.round(avgZ * 35)) },
-      { name: "High-level outbreaks",         value: redPct },
-      { name: "Moderate outbreaks",            value: yPct  },
-      { name: "Normal level",                  value: gPct  },
-      { name: "Records with prediction",       value: Math.round((hasPred / n) * 100) },
+      { name: "Outbreak Risk",      value: Math.min(100, Math.round(avgZ * 35)) },
+      { name: "High outbreaks",     value: redPct },
+      { name: "Moderate outbreaks", value: yPct  },
+      { name: "Normal level",       value: gPct  },
+      { name: "With prediction",    value: Math.round((hasPred / n) * 100) },
     ];
   }, [rowsInView]);
 
@@ -304,15 +315,15 @@ export default function AnalysisPanel() {
         {/* Epidemic curve + Sex breakdown */}
         <div className="grid gap-6 md:grid-cols-2">
 
-          {/* Epidemic curve */}
+          {/* ── FIX 1: Epidemic Curve — 4 year ticks on XAxis ── */}
           <div className="rounded-lg border p-4">
             <div className="flex items-start justify-between gap-2 mb-4">
               <h3 className="font-semibold">Epidemic Curve</h3>
               <span className="text-xs text-gray-400">{filteredYears.length} years · Total</span>
             </div>
-            <div className="h-[280px] sm:h-56">
+            <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={epidemicData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <AreaChart data={epidemicData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gObs" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%"  stopColor="#9CA3AF" stopOpacity={0.5} />
@@ -324,8 +335,17 @@ export default function AnalysisPanel() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={48} />
+                  {/* Show only up to 4 year labels */}
+                  <XAxis
+                    dataKey="year"
+                    ticks={xAxisTicks}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10 }}
+                    width={52}
+                    tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                  />
                   <Tooltip
                     labelFormatter={(v) => `Year: ${v}`}
                     formatter={(v, name) => [Number(v).toLocaleString(), name === "predicted" ? "Predicted" : "Observed"]}
@@ -345,18 +365,26 @@ export default function AnalysisPanel() {
             </div>
           </div>
 
-          {/* Cases by Sex — Female vs Male (observed count from DB) */}
+          {/* Cases by Sex */}
           <div className="rounded-lg border p-4">
             <div className="flex items-start justify-between gap-2 mb-4">
               <h3 className="font-semibold">Cases by Sex</h3>
               <span className="text-xs text-gray-400">Female vs Male · observed</span>
             </div>
-            <div className="h-[280px] sm:h-56">
+            <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sexChartData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={52} />
+                  <XAxis
+                    dataKey="year"
+                    ticks={xAxisTicks}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10 }}
+                    width={52}
+                    tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                  />
                   <Tooltip
                     labelFormatter={(v) => `Year: ${v}`}
                     formatter={(v, name) => [Number(v).toLocaleString(), name]}
@@ -383,7 +411,7 @@ export default function AnalysisPanel() {
           </div>
         </div>
 
-        {/* Disease distribution (from DB — auto-updates when new diseases added) */}
+        {/* ── FIX 2: Disease Distribution — NO labels on pie slices ── */}
         <div className="rounded-lg border p-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <div>
@@ -400,17 +428,22 @@ export default function AnalysisPanel() {
               No data for this selection.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-              <div className="w-full h-[260px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+              {/* Pie — no labels, no labelLine */}
+              <div className="w-full h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={displayedDiseaseData}
-                      dataKey="value" nameKey="name"
-                      cx="50%" cy="50%"
-                      outerRadius={110} innerRadius={50}
-                      paddingAngle={3} labelLine={false}
-                      label={({ name }) => name.length > 12 ? name.slice(0, 12) + "…" : name}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      innerRadius={40}
+                      paddingAngle={3}
+                      label={false}
+                      labelLine={false}
                       onClick={(d) => {
                         if (!d?.name) return;
                         setSelectedDisease((p) => p === d.name ? "All" : d.name);
@@ -434,7 +467,8 @@ export default function AnalysisPanel() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="grid gap-1.5 max-h-64 overflow-auto pr-1">
+              {/* Legend list */}
+              <div className="grid gap-1.5 max-h-56 overflow-auto pr-1">
                 {displayedDiseaseData.map((d, i) => (
                   <button
                     key={d.name}
@@ -460,14 +494,15 @@ export default function AnalysisPanel() {
           )}
         </div>
 
-        {/* Risk indicators */}
+        {/* ── FIX 3: Outbreak Risk Indicators — shorter labels + tighter margins ── */}
         <div className="rounded-lg border p-4">
           <h3 className="font-semibold mb-3">Outbreak Risk Indicators</h3>
-          <div className="h-[280px] sm:h-52">
+          <div className="h-[200px] sm:h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={riskFactors} layout="vertical"
-                margin={{ top: 5, right: 20, left: 16, bottom: 5 }}
+                data={riskFactors}
+                layout="vertical"
+                margin={{ top: 4, right: 36, left: 0, bottom: 4 }}
               >
                 <defs>
                   <linearGradient id="blueGrad" x1="0" y1="0" x2="1" y2="0">
@@ -475,12 +510,23 @@ export default function AnalysisPanel() {
                     <stop offset="100%" stopColor="#60A5FA" />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 10 }} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={80}
+                  tick={{ fontSize: 10 }}
+                  tickLine={true}
+                />
                 <Tooltip formatter={(v) => [`${v}%`, "Score"]} />
-                <Bar dataKey="value" radius={[8, 8, 8, 8]} fill="url(#blueGrad)">
-                  <LabelList dataKey="value" position="right" fontSize={11} formatter={(v) => `${v}%`} />
+                <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="url(#blueGrad)">
+                  <LabelList
+                    dataKey="value"
+                    position="right"
+                    fontSize={10}
+                    formatter={(v) => `${v}%`}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
