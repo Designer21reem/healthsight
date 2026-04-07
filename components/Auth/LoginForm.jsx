@@ -1,13 +1,15 @@
 "use client";
+
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../../lib/supabaseClient";
+import { useRouter } from "next/navigation"; // أضف هذا
 
 export default function LoginForm({ open, onClose, onShowRegister }) {
+  const router = useRouter(); // أضف هذا
   const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -23,7 +25,6 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // ✅ مهم: لا تسوي onClose هنا حتى ما يصير تعارض
   const handleSwitchToRegister = () => {
     onShowRegister?.();
   };
@@ -63,7 +64,6 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
       }
 
       if (authData?.user) {
-        // جلب role من profiles حتى نوجه
         let userRole = "user";
         try {
           const { data: profileData } = await supabase
@@ -77,14 +77,14 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
           userRole = "user";
         }
 
-        // تنظيف وإغلاق
         setEmail("");
         setPassword("");
         onClose?.();
 
-        // توجيه حسب role
+        // ✅ استخدم router.push بدلاً من window.location
         setTimeout(() => {
-          window.location.href = userRole === "admin" ? "/admin" : "/user";
+          router.push(userRole === "admin" ? "/admin" : "/user");
+          router.refresh();
         }, 50);
       }
     } catch (err) {
@@ -116,7 +116,7 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
         <header className="mb-6 text-center">
           <h2 className="text-2xl font-extrabold">
             Sign in to{" "}
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-pink-500">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-pink-500">
               Health Companion
             </span>
           </h2>
