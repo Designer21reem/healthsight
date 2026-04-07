@@ -422,7 +422,7 @@ export default function UserPage() {
         {/* Date Selection Row */}
         <div
           ref={daysRowRef}
-          className="flex gap-2 sm:gap-3 overflow-x-auto pb-4 mb-6 scroll-smooth"
+          className="flex gap-2 h-16 pt-1.5 sm:gap-3 overflow-x-auto pb-4 mb-6 scroll-smooth"
           style={{ scrollbarWidth: "thin" }}
         >
           {currentDays.map((day) => (
