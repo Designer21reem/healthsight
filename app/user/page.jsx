@@ -12,7 +12,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -20,10 +19,9 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  type ChartConfig,
 } from "@/components/ui/chart";
 
-// recharts components (wrapped by shadcn)
+// recharts components
 import {
   Radar,
   RadarChart,
@@ -35,10 +33,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
+  ResponsiveContainer,
 } from "recharts";
 
 // Helper function to get last 7 days
@@ -60,20 +55,20 @@ const getLast7Days = () => {
   return days;
 };
 
-// Chart Configurations
+// Chart configurations
 const radarChartConfig = {
   score: {
     label: "Health Score",
-    color: "hsl(var(--chart-1))",
+    color: "#4F46E5",
   },
-} satisfies ChartConfig;
+} as const;
 
 const moodChartConfig = {
   mood: {
     label: "Mood Score",
-    color: "hsl(var(--chart-2))",
+    color: "#F59E0B",
   },
-} satisfies ChartConfig;
+} as const;
 
 export default function UserPage() {
   const router = useRouter();
@@ -511,14 +506,16 @@ export default function UserPage() {
               <CardDescription>Your current mental wellness profile</CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={radarChartConfig} className="mx-auto aspect-square max-h-[280px]">
-                <RadarChart data={radarData}>
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-                  <PolarGrid gridType="circle" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#6B7280" }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#9CA3AF" }} />
-                  <Radar dataKey="score" fill="var(--color-score)" fillOpacity={0.5} stroke="var(--color-score)" strokeWidth={2} />
-                </RadarChart>
+              <ChartContainer config={radarChartConfig} className="mx-auto aspect-square max-h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData}>
+                    <PolarGrid gridType="circle" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#6B7280" }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#9CA3AF" }} />
+                    <Radar dataKey="score" fill="#4F46E5" fillOpacity={0.5} stroke="#4F46E5" strokeWidth={2} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                  </RadarChart>
+                </ResponsiveContainer>
               </ChartContainer>
             </CardContent>
           </Card>
@@ -531,13 +528,15 @@ export default function UserPage() {
             </CardHeader>
             <CardContent>
               <ChartContainer config={moodChartConfig} className="h-[280px] w-full">
-                <LineChart data={moodData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={30} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line type="monotone" dataKey="mood" stroke="var(--color-mood)" strokeWidth={2.5} dot={{ r: 4, fill: "var(--color-mood)" }} activeDot={{ r: 6 }} />
-                </LineChart>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={moodData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={30} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line type="monotone" dataKey="mood" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 4, fill: "#F59E0B" }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               </ChartContainer>
             </CardContent>
           </Card>
