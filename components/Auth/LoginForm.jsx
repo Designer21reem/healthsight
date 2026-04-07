@@ -3,10 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { useRouter } from "next/navigation"; // أضف هذا
+import { useRouter } from "next/navigation";
 
 export default function LoginForm({ open, onClose, onShowRegister }) {
-  const router = useRouter(); // أضف هذا
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,6 +15,7 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
 
   useEffect(() => {
     setMounted(true);
+    console.log("LoginForm mounted");
   }, []);
 
   useEffect(() => {
@@ -31,11 +32,15 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    console.log("Form submitted");
     setError("");
     setLoading(true);
 
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
+
+    console.log("Email:", cleanEmail);
+    console.log("Password length:", cleanPassword.length);
 
     if (!cleanEmail || !cleanPassword) {
       setError("Please fill in all fields.");
@@ -44,12 +49,18 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
     }
 
     try {
+      console.log("Attempting to sign in with Supabase...");
+      console.log("Supabase URL exists:", !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+      
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
       });
 
+      console.log("Auth response:", { authData, authError });
+
       if (authError) {
+        console.error("Auth error:", authError);
         if (authError.message?.includes("Invalid login credentials")) {
           setError("Invalid email or password.");
         } else if (authError.message?.includes("Email not confirmed")) {
@@ -64,31 +75,42 @@ export default function LoginForm({ open, onClose, onShowRegister }) {
       }
 
       if (authData?.user) {
+        console.log("User authenticated:", authData.user.id);
+        
         let userRole = "user";
         try {
-          const { data: profileData } = await supabase
+          console.log("Fetching user role...");
+          const { data: profileData, error: profileError } = await supabase
             .from("profiles")
             .select("role")
             .eq("id", authData.user.id)
             .single();
 
+          console.log("Profile data:", profileData);
+          if (profileError) console.error("Profile error:", profileError);
+          
           userRole = profileData?.role || "user";
-        } catch {
+        } catch (err) {
+          console.error("Role fetch error:", err);
           userRole = "user";
         }
 
+        console.log("User role:", userRole);
+        
         setEmail("");
         setPassword("");
         onClose?.();
 
-        // ✅ استخدم router.push بدلاً من window.location
+        const redirectPath = userRole === "admin" ? "/admin" : "/user";
+        console.log("Redirecting to:", redirectPath);
+        
         setTimeout(() => {
-          router.push(userRole === "admin" ? "/admin" : "/user");
+          router.push(redirectPath);
           router.refresh();
         }, 50);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Unexpected error:", err);
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
