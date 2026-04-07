@@ -211,6 +211,7 @@ export default function UserPage() {
 
   const moodData = currentDays.map((day) => ({
     day: `${day.month} ${day.day}`,
+    shortDay: day.label,
     date: day.date,
     mood: dailyData[day.date]?.mood ?? 7,
     isToday: day.isToday,
@@ -218,18 +219,17 @@ export default function UserPage() {
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
-    const found = moodData.find((d) => d.day === label);
+    const found = moodData.find((d) => d.day === label || d.shortDay === label);
     const dayData = found ? dailyData[found.date] : null;
     return (
       <motion.div initial={{ opacity:0, scale:0.8 }} animate={{ opacity:1, scale:1 }}
-        className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
-        <p className="text-sm font-semibold text-gray-800">{label}</p>
-        <p className="text-sm text-indigo-600">Mood: <span className="font-semibold">{payload[0].value}/10</span></p>
+        className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm text-xs sm:text-sm">
+        <p className="text-sm font-semibold text-gray-800">{found?.day || label}</p>
+        <p className="text-xs sm:text-sm text-indigo-600">Mood: <span className="font-semibold">{payload[0].value}/10</span></p>
         {dayData && (
           <>
-            <p className="text-sm text-blue-500">Sleep: {dayData.sleep}/10</p>
-            <p className="text-sm text-yellow-500">Energy: {dayData.energy}/10</p>
-            <p className="text-sm text-slate-500">Water: {dayData.water} · Meals: {dayData.meals}</p>
+            <p className="text-xs text-blue-500">Sleep: {dayData.sleep}/10</p>
+            <p className="text-xs text-yellow-500">Energy: {dayData.energy}/10</p>
           </>
         )}
       </motion.div>
@@ -355,73 +355,119 @@ export default function UserPage() {
         user={user}
         onLogout={handleLogout}
         logoutLoading={logoutLoading}
-        showAssistantBtn={true}
+        showAssistantBtn={false}
         showBackBtn={false}
       />
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <motion.div initial={{ opacity:0, y:-20 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.4 }}
-          className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Your Daily Statistics</h2>
-          <div className="text-sm text-gray-500">{formatMonthYear(selectedDate || new Date().toISOString())}</div>
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-4 sm:py-8">
+        {/* Header section with title and assistant button */}
+        <motion.div 
+          initial={{ opacity:0, y:-20 }} 
+          animate={{ opacity:1, y:0 }} 
+          transition={{ delay:0.4 }}
+          className="flex flex-row items-center justify-between mb-4 sm:mb-6"
+        >
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-800">Your Daily Statistics</h2>
+            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{formatMonthYear(selectedDate || new Date().toISOString())}</p>
+          </div>
+          
+          {/* Assistant Button - moved here from header */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            animate={{ y: [0, -3, 0], rotate: [0, 2, -2, 0] }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+              repeatType: "loop",
+              ease: "easeInOut",
+            }}
+            onClick={() => router.push("/assistant")}
+            className="relative flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 hover:shadow-lg transition-all duration-300"
+            aria-label="Open AI Assistant"
+            title="AI Assistant"
+          >
+            <motion.span
+              className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-400"
+              animate={{ scale: [1, 1.5, 1], opacity: [0.9, 0.3, 0.9] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="8" width="14" height="10" rx="2" fill="white" stroke="white" strokeWidth="1.2" />
+              <circle cx="9.5" cy="12.5" r="1" fill="#6366F1" />
+              <circle cx="14.5" cy="12.5" r="1" fill="#6366F1" />
+              <path d="M9 16H15" stroke="#6366F1" strokeWidth="1.2" strokeLinecap="round" />
+              <rect x="10.5" y="5" width="3" height="3" rx="0.8" fill="#C7D2FE" stroke="#6366F1" strokeWidth="0.8" />
+            </svg>
+          </motion.button>
         </motion.div>
 
-        <motion.div ref={daysRowRef} tabIndex={0} role="listbox" aria-label="Select day"
-          variants={containerVariants} initial="hidden" animate="visible"
-          onKeyDown={(e) => {
-            if (!daysRowRef.current) return;
-            if (e.key === "ArrowRight") { e.preventDefault(); daysRowRef.current.scrollBy({ left:90, behavior:"smooth" }); }
-            if (e.key === "ArrowLeft")  { e.preventDefault(); daysRowRef.current.scrollBy({ left:-90, behavior:"smooth" }); }
-          }}
-          className="hide-scrollbar outline-none flex gap-3 overflow-x-auto pb-3 mb-6 pt-3 snap-x snap-mandatory scroll-smooth touch-pan-x overscroll-x-contain">
+        {/* Days row - improved for mobile */}
+        <motion.div 
+          ref={daysRowRef} 
+          tabIndex={0} 
+          role="listbox" 
+          aria-label="Select day"
+          variants={containerVariants} 
+          initial="hidden" 
+          animate="visible"
+          className="hide-scrollbar outline-none flex gap-2 sm:gap-3 overflow-x-auto pb-3 mb-5 sm:mb-6 pt-2 snap-x snap-mandatory scroll-smooth touch-pan-x overscroll-x-contain"
+        >
           {currentDays.map((day) => (
-            <motion.button key={day.date} variants={itemVariants} whileHover={{ scale:1.05 }} whileTap={{ scale:0.95 }}
+            <motion.button 
+              key={day.date} 
+              variants={itemVariants} 
+              whileHover={{ scale:1.05 }} 
+              whileTap={{ scale:0.95 }}
               onClick={() => setSelectedDate(day.date)}
-              className={`snap-center relative flex-none w-14 h-14 rounded-full flex flex-col items-center justify-center text-xs shadow-sm transition-all ${
+              className={`snap-center relative flex-none w-12 h-12 sm:w-14 sm:h-14 rounded-full flex flex-col items-center justify-center text-xs shadow-sm transition-all ${
                 selectedDate === day.date ? "bg-white border-2 border-indigo-200 text-slate-900 shadow-md" : "bg-gray-100 text-gray-500"
               } ${day.isToday ? "ring-2 ring-green-400" : ""}`}
               aria-pressed={selectedDate === day.date}>
-              <span className="text-sm font-bold">{day.day}</span>
-              <span className="mt-0.5">{day.label}</span>
+              <span className="text-sm sm:text-base font-bold">{day.day}</span>
+              <span className="text-[10px] sm:text-xs mt-0.5">{day.label}</span>
               {day.isToday && (
                 <motion.div initial={{ scale:0 }} animate={{ scale:1 }}
-                  className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full" />
+                  className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full" />
               )}
             </motion.button>
           ))}
         </motion.div>
 
-        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 gap-6 md:grid-cols-12">
+        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-12">
 
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 bg-blue-50 rounded-xl p-6 shadow-sm mb-6">
+          {/* Overall Score Card */}
+          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 shadow-sm mb-4 sm:mb-6">
             <div className="flex items-start justify-between">
               <div>
-                <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-                  <span className="w-3 h-3 rounded-full bg-pink-400" />
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 mb-1 sm:mb-2">
+                  <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-pink-400" />
                   Overall Health Score — {formatDisplayDate(selectedDate)}
                 </div>
                 <motion.div key={getSelectedHealthScore()} initial={{ scale:0 }} animate={{ scale:1 }} transition={{ delay:0.2, type:"spring" }}
-                  className="text-5xl font-extrabold text-green-500 mb-2">
+                  className="text-3xl sm:text-5xl font-extrabold text-green-500 mb-1 sm:mb-2">
                   {getSelectedHealthScore()}
                 </motion.div>
-                <div className="text-lg font-semibold text-gray-800 mb-1">
+                <div className="text-base sm:text-lg font-semibold text-gray-800 mb-0.5 sm:mb-1">
                   {getSelectedHealthScore() >= 90 ? "Excellent" : getSelectedHealthScore() >= 80 ? "Very Good" : getSelectedHealthScore() >= 70 ? "Good" : "Needs Improvement"}
                 </div>
-                <p className="text-sm text-gray-500">
+                <p className="text-xs text-gray-500">
                   {selectedDate === currentDays[currentDays.length - 1]?.date ? "Based on your daily assessment" : "Historical data"}
                 </p>
               </div>
               <motion.div whileHover={{ rotate:360 }} transition={{ duration:0.5 }}
-                className="flex items-center justify-center w-16 h-16 bg-green-50 rounded-full">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-green-50 rounded-full">
+                <svg width="24" height="24" sm:width="28" sm:height="28" viewBox="0 0 24 24" fill="none">
                   <path d="M3 12l4 4 8-8 6 6" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </motion.div>
             </div>
           </motion.section>
 
-          <motion.section variants={cardVariants} className="md:col-span-12 bg-white rounded-xl p-6 shadow-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Metrics Grid */}
+          <motion.section variants={cardVariants} className="md:col-span-12 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <Metric title="Mood" value={`${currentData.mood}/10`} color="bg-pink-500" progress={currentData.mood * 10} />
               <Metric title="Sleep" value={`${currentData.sleep}/10`} color="bg-blue-500" progress={currentData.sleep * 10} />
               <Metric title="Energy" value={`${currentData.energy}/10`} color="bg-yellow-500" progress={currentData.energy * 10} />
@@ -429,42 +475,62 @@ export default function UserPage() {
             </div>
           </motion.section>
 
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-4 bg-white rounded-xl p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-2">Mental Health Radar</h3>
-            <p className="text-sm text-gray-500 mb-4">Your current mental wellness profile</p>
-            <div className="w-full h-48">
+          {/* Radar Chart - Full width on mobile */}
+          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 lg:col-span-4 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">Mental Health Radar</h3>
+            <p className="text-xs text-gray-500 mb-3 sm:mb-4">Your current mental wellness profile</p>
+            <div className="w-full h-48 sm:h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                   <PolarGrid />
-                  <PolarAngleAxis dataKey="subject" tick={{ fontSize:11, fill:"#6B7280" }} />
-                  <PolarRadiusAxis angle={30} domain={[0,100]} tick={{ fontSize:10, fill:"#9CA3AF" }} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize:10, fill:"#6B7280" }} />
+                  <PolarRadiusAxis angle={30} domain={[0,100]} tick={{ fontSize:9, fill:"#9CA3AF" }} />
                   <Radar name="Mental Health" dataKey="A" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.3} strokeWidth={1.5} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
           </motion.section>
 
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-5 bg-white rounded-xl p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-2">7-Day Mood Trend</h3>
-            <p className="text-sm text-gray-500 mb-4">Your mood over the past week</p>
-            <div className="w-full h-48">
+          {/* Line Chart - Improved for mobile */}
+          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 lg:col-span-5 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">7-Day Mood Trend</h3>
+            <p className="text-xs text-gray-500 mb-3 sm:mb-4">Your mood over the past week</p>
+            <div className="w-full h-48 sm:h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={moodData}>
+                <LineChart data={moodData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="day" tick={{ fontSize:11, fill:"#6B7280" }} axisLine={false} />
-                  <YAxis domain={[0,10]} tick={{ fontSize:10, fill:"#9CA3AF" }} axisLine={false} />
+                  <XAxis 
+                    dataKey="shortDay" 
+                    tick={{ fontSize: 10, fill: "#6B7280" }} 
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                  />
+                  <YAxis 
+                    domain={[0,10]} 
+                    tick={{ fontSize: 9, fill: "#9CA3AF" }} 
+                    axisLine={false}
+                    tickLine={false}
+                    width={25}
+                  />
                   <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="mood" stroke="#4F46E5" strokeWidth={2.5}
-                    dot={{ fill:"#4F46E5", strokeWidth:2, r:4 }}
-                    activeDot={{ r:6, fill:"#4F46E5" }} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="mood" 
+                    stroke="#4F46E5" 
+                    strokeWidth={2}
+                    dot={{ fill: "#4F46E5", strokeWidth: 1.5, r: 3 }}
+                    activeDot={{ r: 5, fill: "#4F46E5" }} 
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </motion.section>
 
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-3 bg-white rounded-xl p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-2">Daily Habits Tracker</h3>
-            <p className="text-sm text-gray-500 mb-4">Monitor your physical health habits</p>
+          {/* Habits Tracker */}
+          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 lg:col-span-3 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">Daily Habits Tracker</h3>
+            <p className="text-xs text-gray-500 mb-3 sm:mb-4">Monitor your physical health habits</p>
             <Habit name="Water Intake" value={`${currentData.water} glasses`} goal="10 glasses/day" color="bg-blue-500" percent={Math.min(100,(Number(currentData.water||0)/10)*100)} />
             <Habit name="Exercise" value={`${currentData.exercise} min`} goal="60 min/day" color="bg-green-500" percent={Math.min(100,(Number(currentData.exercise||0)/60)*100)} />
             <Habit name="Meals" value={`${currentData.meals} meals`} goal="4 meals/day" color="bg-orange-500" percent={Math.min(100,(Number(currentData.meals||0)/4)*100)} />
@@ -477,17 +543,17 @@ export default function UserPage() {
 
 function Metric({ title, value, color = "bg-blue-500", progress = 60 }) {
   return (
-    <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} whileHover={{ scale:1.05 }}
+    <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} whileHover={{ scale:1.02 }}
       className="bg-gray-50 rounded-xl p-3 sm:p-4 min-w-0">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <motion.span whileHover={{ scale:1.2 }} className={`w-3 h-3 rounded-full ${color}`} />
-          <div className="text-sm font-medium text-gray-700">{title}</div>
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <motion.span whileHover={{ scale:1.2 }} className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${color}`} />
+          <div className="text-xs sm:text-sm font-medium text-gray-700">{title}</div>
         </div>
         <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ delay:0.2 }}
-          className="text-base sm:text-lg font-bold text-gray-900">{value}</motion.div>
+          className="text-sm sm:text-base font-bold text-gray-900">{value}</motion.div>
       </div>
-      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
         <motion.div initial={{ width:0 }} animate={{ width:`${progress}%` }} transition={{ duration:1, delay:0.3 }}
           className={`h-full ${color} rounded-full`} />
       </div>
@@ -497,13 +563,13 @@ function Metric({ title, value, color = "bg-blue-500", progress = 60 }) {
 
 function Habit({ name, value, goal, color = "bg-blue-500", percent = 50 }) {
   return (
-    <motion.div initial={{ opacity:0, x:-20 }} animate={{ opacity:1, x:0 }} className="mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-medium text-gray-700">{name}</div>
-        <motion.div whileHover={{ scale:1.1 }} className="text-sm font-semibold text-gray-900">{value}</motion.div>
+    <motion.div initial={{ opacity:0, x:-20 }} animate={{ opacity:1, x:0 }} className="mb-3 sm:mb-4">
+      <div className="flex items-center justify-between mb-1 sm:mb-2">
+        <div className="text-xs sm:text-sm font-medium text-gray-700">{name}</div>
+        <motion.div whileHover={{ scale:1.05 }} className="text-xs sm:text-sm font-semibold text-gray-900">{value}</motion.div>
       </div>
-      <div className="text-xs text-gray-500 mb-2">Goal: {goal}</div>
-      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: {goal}</div>
+      <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
         <motion.div initial={{ width:0 }} animate={{ width:`${percent}%` }} transition={{ duration:1, delay:0.3 }}
           className={`h-full ${color} rounded-full`} />
       </div>
