@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ConditionalHeaderFooter from "../components/Layout/ConditionalHeaderFooter";
 import { AuthProvider } from "../context/AuthContext";
-
+// في بداية الملف
+console.log("Layout loaded, Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "Exists" : "Missing");
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

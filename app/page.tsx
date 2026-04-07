@@ -1,4 +1,6 @@
 "use client";
+// في بداية الملف
+console.log("Layout loaded, Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL ? "Exists" : "Missing");
 import React, { useState, useEffect, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import LoginForm from "../components/Auth/LoginForm";
