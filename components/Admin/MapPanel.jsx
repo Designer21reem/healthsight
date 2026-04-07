@@ -3,11 +3,9 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
-// ✅ ياخذ القيم من .envlocal
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
-console.log("MAP TOKEN:", process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN);
 
 const COUNTY_COORDS = {
   "Los Angeles":     [-118.2437, 34.0522],
@@ -104,7 +102,7 @@ function AlertModal({ county, year, diseases, onClose }) {
   const [selectedDisease, setSelectedDisease] = useState(diseases[0] || "");
   const [message, setMessage]                 = useState("");
   const [sending, setSending]                 = useState(false);
-  const [result, setResult]                   = useState(null); // { sent, users_notified }
+  const [result, setResult]                   = useState(null);
   const [err, setErr]                         = useState(null);
 
   const defaultMsg =
@@ -112,36 +110,23 @@ function AlertModal({ county, year, diseases, onClose }) {
     `Please take precautions and seek medical advice if you have symptoms.`;
 
   const handleSend = async () => {
-    setSending(true);
-    setErr(null);
+    setSending(true); setErr(null);
     try {
-      const body = {
-        disease:        selectedDisease,
-        county,
-        year:           Number(year),
-        outbreak_level: "red",
-        message:        message.trim() || defaultMsg,
-      };
-
       const res = await fetch(`${API_BASE}/send-alert`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(body),
+        body: JSON.stringify({
+          disease:        selectedDisease,
+          county,
+          year:           Number(year),
+          outbreak_level: "red",
+          message:        message.trim() || defaultMsg,
+        }),
       });
-
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.detail || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      // data = { status, users_notified, county, disease }
-      setResult(data);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setSending(false);
-    }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
+      setResult(await res.json());
+    } catch (e) { setErr(e.message); }
+    finally { setSending(false); }
   };
 
   return (
@@ -153,85 +138,48 @@ function AlertModal({ county, year, diseases, onClose }) {
         </div>
 
         {result ? (
-          /* ── Success state ── */
           <div className="space-y-3">
             <div className="rounded-lg bg-green-50 border border-green-200 p-4">
-              <p className="text-green-800 font-semibold text-sm mb-1">
-                Alert sent successfully ✅
-              </p>
+              <p className="text-green-800 font-semibold text-sm mb-1">Alert sent successfully ✅</p>
               <p className="text-green-700 text-xs">
-                <strong>{result.users_notified}</strong> user
-                {result.users_notified !== 1 ? "s" : ""} in{" "}
-                <strong>{county}</strong> received a notification for{" "}
-                <strong>{selectedDisease}</strong>.
+                <strong>{result.users_notified}</strong> user{result.users_notified !== 1 ? "s" : ""} in{" "}
+                <strong>{county}</strong> received a notification for <strong>{selectedDisease}</strong>.
               </p>
               {result.users_notified === 0 && (
                 <p className="text-yellow-700 text-xs mt-2 bg-yellow-50 rounded p-2">
                   No registered users found in <strong>{county}</strong>.
-                  Users receive alerts when their county (set during registration)
-                  matches the outbreak location.
+                  Users receive alerts when their county (set during registration) matches the outbreak location.
                 </p>
               )}
             </div>
-            <button onClick={onClose}
-              className="w-full rounded-md bg-gray-100 px-4 py-2.5 text-sm hover:bg-gray-200">
-              Close
-            </button>
+            <button onClick={onClose} className="w-full rounded-md bg-gray-100 px-4 py-2.5 text-sm hover:bg-gray-200">Close</button>
           </div>
         ) : (
-          /* ── Form state ── */
           <div className="space-y-3">
             <p className="text-xs text-gray-500">
-              Sends a notification to all users registered in{" "}
-              <strong>{county}</strong>. The notification appears in their
-              bell icon (🔔) in the header.
+              Sends a notification to all users registered in <strong>{county}</strong>.
+              The notification appears in their bell icon (🔔) in the header.
             </p>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Disease</label>
-              <select
-                value={selectedDisease}
-                onChange={(e) => setSelectedDisease(e.target.value)}
-                className="w-full rounded-md border px-3 py-2 text-sm"
-              >
+              <select value={selectedDisease} onChange={(e) => setSelectedDisease(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-sm">
                 {diseases.map((d) => <option key={d}>{d}</option>)}
               </select>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-              <textarea
-                rows={4}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={defaultMsg}
-                className="w-full rounded-md border px-3 py-2 text-sm resize-none"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Leave blank to use the default message above.
-              </p>
+              <textarea rows={4} value={message} onChange={(e) => setMessage(e.target.value)}
+                placeholder={defaultMsg} className="w-full rounded-md border px-3 py-2 text-sm resize-none" />
+              <p className="text-xs text-gray-400 mt-1">Leave blank to use the default message.</p>
             </div>
-
-            {err && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-red-700 text-sm">
-                {err}
-              </div>
-            )}
-
+            {err && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-red-700 text-sm">{err}</div>}
             <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleSend}
-                disabled={sending}
-                className="flex-1 rounded-md bg-red-600 text-white py-2.5 text-sm font-medium hover:bg-red-700 disabled:opacity-50"
-              >
+              <button onClick={handleSend} disabled={sending}
+                className="flex-1 rounded-md bg-red-600 text-white py-2.5 text-sm font-medium hover:bg-red-700 disabled:opacity-50">
                 {sending ? "Sending…" : "Send Alert"}
               </button>
-              <button
-                onClick={onClose}
-                className="rounded-md border px-4 py-2.5 text-sm hover:bg-gray-50"
-              >
-                Cancel
-              </button>
+              <button onClick={onClose} className="rounded-md border px-4 py-2.5 text-sm hover:bg-gray-50">Cancel</button>
             </div>
           </div>
         )}
@@ -252,6 +200,7 @@ export default function MapPanel() {
   const [error, setError]                     = useState(null);
   const [lastRefresh, setLastRefresh]         = useState(null);
   const [selectedDisease, setSelectedDisease] = useState("All");
+  const [selectedCounty, setSelectedCounty]   = useState("All"); // ← NEW
   const [isPlaying, setIsPlaying]             = useState(false);
   const [playSpeed, setPlaySpeed]             = useState(1);
   const [timeIndex, setTimeIndex]             = useState(0);
@@ -292,13 +241,23 @@ export default function MapPanel() {
     return () => clearInterval(autoRef.current);
   }, [fetchData]);
 
-  // ── GeoJSON ───────────────────────────────────────────────────────────────
+  // Reset county filter when disease changes
+  useEffect(() => { setSelectedCounty("All"); }, [selectedDisease]);
+
+  // Counties available in current data
+  const countiesInDB = React.useMemo(
+    () => [...new Set(predictions.map((r) => r.county))].sort(),
+    [predictions]
+  );
+
+  // ── GeoJSON — filters by both disease AND county ──────────────────────────
   const buildGeoJSON = useCallback(
-    (yearStr, diseaseFilter) => {
+    (yearStr, diseaseFilter, countyFilter) => {
       const filtered = predictions.filter(
         (r) =>
           String(r.year) === yearStr &&
-          (diseaseFilter === "All" || r.disease === diseaseFilter)
+          (diseaseFilter === "All" || r.disease === diseaseFilter) &&
+          (countyFilter  === "All" || r.county  === countyFilter)
       );
 
       const byCounty = {};
@@ -362,10 +321,7 @@ export default function MapPanel() {
     map.current.addControl(new mapboxgl.ScaleControl({ maxWidth:140, unit:"metric" }), "bottom-left");
 
     map.current.on("load", () => {
-      map.current.addSource("diseases", {
-        type:"geojson",
-        data:{ type:"FeatureCollection", features:[] },
-      });
+      map.current.addSource("diseases", { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
 
       map.current.addLayer({
         id:"disease-heatmap", type:"heatmap", source:"diseases", maxzoom:8,
@@ -397,7 +353,6 @@ export default function MapPanel() {
 
       setTimeout(safeResize, 0);
 
-      // Popup
       map.current.on("click", "disease-points", (e) => {
         if (!e.features?.[0]) return;
         const p      = e.features[0].properties;
@@ -406,20 +361,14 @@ export default function MapPanel() {
         let tableRows = "";
         try {
           const dis = JSON.parse(p.diseases || "{}");
-          Object.entries(dis)
-            .sort((a, b) => b[1].predicted - a[1].predicted)
-            .forEach(([name, vals]) => {
-              tableRows += `
-                <tr style="border-bottom:1px solid #374151">
-                  <td style="padding:4px 8px 4px 0;color:#D1D5DB">${name}</td>
-                  <td style="padding:4px;text-align:right;color:#93C5FD;font-weight:600">
-                    ${Math.round(vals.predicted).toLocaleString()}
-                  </td>
-                  <td style="padding:4px 0 4px 8px;text-align:right;color:#9CA3AF">
-                    ${Math.round(vals.observed).toLocaleString()}
-                  </td>
-                </tr>`;
-            });
+          Object.entries(dis).sort((a, b) => b[1].predicted - a[1].predicted).forEach(([name, vals]) => {
+            tableRows += `
+              <tr style="border-bottom:1px solid #374151">
+                <td style="padding:4px 8px 4px 0;color:#D1D5DB">${name}</td>
+                <td style="padding:4px;text-align:right;color:#93C5FD;font-weight:600">${Math.round(vals.predicted).toLocaleString()}</td>
+                <td style="padding:4px 0 4px 8px;text-align:right;color:#9CA3AF">${Math.round(vals.observed).toLocaleString()}</td>
+              </tr>`;
+          });
         } catch {}
 
         const html = `
@@ -442,13 +391,11 @@ export default function MapPanel() {
             <div style="border-top:1px solid #374151;padding-top:8px">
               <div style="color:#6B7280;font-size:11px;margin-bottom:4px">Cases by disease</div>
               <table style="width:100%;border-collapse:collapse;font-size:11px">
-                <thead>
-                  <tr>
-                    <th style="text-align:left;color:#6B7280;padding-bottom:4px">Disease</th>
-                    <th style="text-align:right;color:#6B7280;padding-bottom:4px">Predicted</th>
-                    <th style="text-align:right;color:#6B7280;padding-bottom:4px;padding-left:8px">Observed</th>
-                  </tr>
-                </thead>
+                <thead><tr>
+                  <th style="text-align:left;color:#6B7280;padding-bottom:4px">Disease</th>
+                  <th style="text-align:right;color:#6B7280;padding-bottom:4px">Predicted</th>
+                  <th style="text-align:right;color:#6B7280;padding-bottom:4px;padding-left:8px">Observed</th>
+                </tr></thead>
                 <tbody>${tableRows}</tbody>
               </table>
             </div>` : ""}
@@ -474,10 +421,20 @@ export default function MapPanel() {
     if (!map.current || !timeSteps.length) return;
     const src = map.current.getSource("diseases");
     if (!src) return;
-    try { src.setData(buildGeoJSON(timeSteps[timeIndex], selectedDisease)); } catch {}
-  }, [predictions, selectedDisease, timeIndex, timeSteps, buildGeoJSON]);
+    try { src.setData(buildGeoJSON(timeSteps[timeIndex], selectedDisease, selectedCounty)); } catch {}
+  }, [predictions, selectedDisease, selectedCounty, timeIndex, timeSteps, buildGeoJSON]);
 
-  useEffect(() => { setTimeout(safeResize, 0); }, [selectedDisease, startYear, endYear, safeResize]);
+  useEffect(() => { setTimeout(safeResize, 0); }, [selectedDisease, selectedCounty, startYear, endYear, safeResize]);
+
+  // When county selected, fly to it
+  useEffect(() => {
+    if (selectedCounty !== "All" && map.current) {
+      const coords = COUNTY_COORDS[selectedCounty];
+      if (coords) map.current.flyTo({ center: coords, zoom: 8, duration: 1000 });
+    } else if (selectedCounty === "All" && map.current) {
+      map.current.flyTo({ center: [-119.4179, 36.7783], zoom: 5.5, duration: 800 });
+    }
+  }, [selectedCounty]);
 
   // ── animation ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -514,7 +471,7 @@ export default function MapPanel() {
   // ── derived stats ─────────────────────────────────────────────────────────
   const statsData = React.useMemo(() => {
     if (!timeSteps.length) return { totalPredicted:0, totalObserved:0, highRisk:0, cities:[] };
-    const geo   = buildGeoJSON(timeSteps[timeIndex], selectedDisease);
+    const geo   = buildGeoJSON(timeSteps[timeIndex], selectedDisease, selectedCounty);
     const feats = geo.features;
     return {
       totalPredicted: feats.reduce((s, f) => s + (f.properties.cases    || 0), 0),
@@ -535,17 +492,21 @@ export default function MapPanel() {
           };
         }),
     };
-  }, [timeIndex, timeSteps, selectedDisease, buildGeoJSON]);
+  }, [timeIndex, timeSteps, selectedDisease, selectedCounty, buildGeoJSON]);
 
   const visibleDiseases = React.useMemo(() => {
     const year = timeSteps[timeIndex];
     if (!year) return [];
     return [...new Set(
       predictions
-        .filter((r) => String(r.year) === year && (selectedDisease === "All" || r.disease === selectedDisease))
+        .filter((r) =>
+          String(r.year) === year &&
+          (selectedDisease === "All" || r.disease === selectedDisease) &&
+          (selectedCounty  === "All" || r.county  === selectedCounty)
+        )
         .map((r) => r.disease)
     )].sort();
-  }, [predictions, timeSteps, timeIndex, selectedDisease]);
+  }, [predictions, timeSteps, timeIndex, selectedDisease, selectedCounty]);
 
   const hasHighRisk = statsData.highRisk > 0;
   const info        = DISEASE_INFO[selectedDisease] || DISEASE_INFO.All;
@@ -571,7 +532,7 @@ export default function MapPanel() {
               <div>
                 <h2 className="text-xl sm:text-2xl font-semibold">Outbreaks Map</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Predicted cases by county · Sex: Total
+                  Predicted cases by county
                   {" · "}Last refresh: <span suppressHydrationWarning>{lastRefresh || "—"}</span>
                   {loading && <span className="ml-2 text-blue-400">loading…</span>}
                   {error   && <span className="ml-2 text-red-500">Error: {error}</span>}
@@ -579,7 +540,6 @@ export default function MapPanel() {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Send Alert — enabled only when high-risk areas exist */}
                 <button
                   onClick={() => {
                     const firstHighRisk = statsData.cities.find((c) => c.level === "red");
@@ -596,32 +556,47 @@ export default function MapPanel() {
                   ⚠ Send Alert
                 </button>
 
-                <button
-                  onClick={fetchData}
-                  disabled={loading}
-                  className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40"
-                >
+                <button onClick={fetchData} disabled={loading}
+                  className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40">
                   Refresh
                 </button>
               </div>
             </div>
 
-            {/* Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-              <div className="sm:col-span-4">
+            {/* Filters — Disease + County + Year range */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Disease */}
+              <div>
                 <label className="text-sm font-medium text-gray-700 block mb-1">Disease</label>
                 <select
                   value={selectedDisease}
                   onChange={(e) => setSelectedDisease(e.target.value)}
                   className="w-full rounded-md border px-3 py-2 text-sm"
                 >
-                  <option value="All">All</option>
+                  <option value="All">All diseases</option>
                   {[...new Set(predictions.map((r) => r.disease))].sort().map((d) => (
                     <option key={d}>{d}</option>
                   ))}
                 </select>
               </div>
-              <div className="sm:col-span-4">
+
+              {/* County — NEW */}
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">County</label>
+                <select
+                  value={selectedCounty}
+                  onChange={(e) => setSelectedCounty(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                >
+                  <option value="All">All counties</option>
+                  {countiesInDB.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* From year */}
+              <div>
                 <label className="text-sm font-medium text-gray-700 block mb-1">From year</label>
                 <input
                   type="number" min="2001" max="2030"
@@ -630,7 +605,9 @@ export default function MapPanel() {
                   className="w-full rounded-md border px-3 py-2 text-sm"
                 />
               </div>
-              <div className="sm:col-span-4">
+
+              {/* To year */}
+              <div>
                 <label className="text-sm font-medium text-gray-700 block mb-1">To year</label>
                 <input
                   type="number" min="2001" max="2030"
@@ -640,6 +617,30 @@ export default function MapPanel() {
                 />
               </div>
             </div>
+
+            {/* Active filters badge */}
+            {(selectedDisease !== "All" || selectedCounty !== "All") && (
+              <div className="flex flex-wrap gap-2">
+                {selectedDisease !== "All" && (
+                  <span className="flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1">
+                    Disease: {selectedDisease}
+                    <button onClick={() => setSelectedDisease("All")} className="ml-1 hover:text-blue-900">×</button>
+                  </span>
+                )}
+                {selectedCounty !== "All" && (
+                  <span className="flex items-center gap-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs px-3 py-1">
+                    County: {selectedCounty}
+                    <button onClick={() => setSelectedCounty("All")} className="ml-1 hover:text-purple-900">×</button>
+                  </span>
+                )}
+                <button
+                  onClick={() => { setSelectedDisease("All"); setSelectedCounty("All"); }}
+                  className="text-xs text-gray-400 hover:text-gray-700 underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Map */}
@@ -671,7 +672,7 @@ export default function MapPanel() {
                   <option value={4}>4×</option>
                 </select>
               </div>
-              <div className="text-sm mt-1.5 sm:mt-0  text-gray-600 sm:ml-auto">
+              <div className="text-sm mt-1.5 sm:mt-0 text-gray-600 sm:ml-auto">
                 Year: <span className="font-semibold">{timeSteps[timeIndex] || "—"}</span>
               </div>
             </div>
@@ -697,26 +698,22 @@ export default function MapPanel() {
               <StatCard
                 label="Predicted cases"
                 rawValue={new Intl.NumberFormat().format(Math.round(statsData.totalPredicted))}
-                sub="model prediction"
-                color="text-blue-600"
+                sub="model prediction" color="text-blue-600"
               />
               <StatCard
                 label="Observed cases"
                 rawValue={new Intl.NumberFormat().format(Math.round(statsData.totalObserved))}
-                sub="actual count"
-                color="text-gray-700"
+                sub="actual count" color="text-gray-700"
               />
               <StatCard
                 label="High-risk areas"
                 rawValue={`${statsData.highRisk} / ${statsData.cities.length}`}
-                sub="z-score > 2"
-                color="text-red-600"
+                sub="z-score > 2" color="text-red-600"
               />
               <StatCard
                 label="DB records"
                 rawValue={predictions.length.toLocaleString()}
-                sub="Supabase (Total)"
-                color="text-gray-700"
+                sub="Supabase (Total)" color="text-gray-700"
               />
             </div>
 
@@ -728,30 +725,23 @@ export default function MapPanel() {
                   <p className="text-sm text-gray-400">No counties for this selection.</p>
                 )}
                 {statsData.cities.map((c) => (
-                  <div
-                    key={c.city}
-                    className="flex items-center justify-between rounded-lg border bg-white p-3 shadow-sm"
-                  >
+                  <div key={c.city} className="flex items-center justify-between rounded-lg border bg-white p-3 shadow-sm">
                     <div
                       className="cursor-pointer flex-1 min-w-0"
-                      onClick={() => map.current?.flyTo({ center: c.coords, zoom: 8 })}
+                      onClick={() => {
+                        setSelectedCounty(c.city);
+                        map.current?.flyTo({ center: c.coords, zoom: 8 });
+                      }}
                     >
                       <p className="font-medium text-sm truncate">{c.city}</p>
-                      <p className="text-xs text-blue-600">
-                        {Number(c.predicted).toLocaleString()} predicted
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {Number(c.observed).toLocaleString()} observed
-                      </p>
+                      <p className="text-xs text-blue-600">{Number(c.predicted).toLocaleString()} predicted</p>
+                      <p className="text-xs text-gray-400">{Number(c.observed).toLocaleString()} observed</p>
                     </div>
 
                     <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                      {/* Risk badge — from DB z-score */}
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${levelCls(c.level)}`}>
                         {levelLabel(c.level)}
                       </span>
-
-                      {/* Alert button — only for red counties */}
                       {c.level === "red" && (
                         <button
                           onClick={() => setAlertModal({

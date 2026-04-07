@@ -51,6 +51,7 @@ export default function AnalysisPanel() {
   const [selectedDisease, setSelectedDisease] = useState("All");
   const [viewYears, setViewYears]             = useState(14);
 
+  // API still uses sex=Total/Female/Male internally — UI shows "gender"
   const totalUrl =
     selectedDisease === "All"
       ? `${API_BASE}/predictions?sex=Total`
@@ -111,18 +112,14 @@ export default function AnalysisPanel() {
     [rowsInView, filteredYears]
   );
 
-  // FIX 1: limit XAxis to show at most 4 evenly-spaced year ticks
+  // Max 4 evenly-spaced year ticks on XAxis
   const xAxisTicks = useMemo(() => {
     if (filteredYears.length <= 4) return filteredYears;
     const step = Math.ceil((filteredYears.length - 1) / 3);
     const ticks = [];
-    for (let i = 0; i < filteredYears.length; i += step) {
-      ticks.push(filteredYears[i]);
-    }
-    // Always include the last year
-    if (ticks[ticks.length - 1] !== filteredYears[filteredYears.length - 1]) {
+    for (let i = 0; i < filteredYears.length; i += step) ticks.push(filteredYears[i]);
+    if (ticks[ticks.length - 1] !== filteredYears[filteredYears.length - 1])
       ticks.push(filteredYears[filteredYears.length - 1]);
-    }
     return ticks;
   }, [filteredYears]);
 
@@ -156,8 +153,8 @@ export default function AnalysisPanel() {
     [diseaseData, selectedDisease]
   );
 
-  // ── Sex breakdown ─────────────────────────────────────────────────────────
-  const sexChartData = useMemo(() => {
+  // ── Gender breakdown (Female vs Male observed per year) ───────────────────
+  const genderChartData = useMemo(() => {
     return filteredYears.map((year) => {
       const fRows = femaleData.filter(
         (r) => r.year === year && (selectedDisease === "All" || r.disease === selectedDisease)
@@ -174,15 +171,14 @@ export default function AnalysisPanel() {
   }, [femaleData, maleData, filteredYears, selectedDisease]);
 
   // ── Risk indicators ───────────────────────────────────────────────────────
-  // FIX 3: shorter label names so YAxis doesn't eat too much horizontal space
   const riskFactors = useMemo(() => {
     if (!rowsInView.length)
       return [
-        { name: "Outbreak Risk", value: 0 },
-        { name: "High outbreaks", value: 0 },
+        { name: "Outbreak Risk",      value: 0 },
+        { name: "High outbreaks",     value: 0 },
         { name: "Moderate outbreaks", value: 0 },
-        { name: "Normal level", value: 0 },
-        { name: "With prediction", value: 0 },
+        { name: "Normal level",       value: 0 },
+        { name: "With prediction",    value: 0 },
       ];
 
     const n       = rowsInView.length;
@@ -240,7 +236,7 @@ export default function AnalysisPanel() {
           <div>
             <h2 className="text-xl sm:text-2xl font-semibold">Analysis</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Predicted cases · Total sex · auto-refresh every 60s
+              Predicted cases · auto-refresh every 60s
               {loading && <span className="ml-2 text-blue-400">loading…</span>}
               {error   && <span className="ml-2 text-red-500">Error: {error}</span>}
             </p>
@@ -312,10 +308,10 @@ export default function AnalysisPanel() {
           </div>
         </div>
 
-        {/* Epidemic curve + Sex breakdown */}
+        {/* Epidemic curve + Gender breakdown */}
         <div className="grid gap-6 md:grid-cols-2">
 
-          {/* ── FIX 1: Epidemic Curve — 4 year ticks on XAxis ── */}
+          {/* Epidemic Curve */}
           <div className="rounded-lg border p-4">
             <div className="flex items-start justify-between gap-2 mb-4">
               <h3 className="font-semibold">Epidemic Curve</h3>
@@ -335,12 +331,7 @@ export default function AnalysisPanel() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
-                  {/* Show only up to 4 year labels */}
-                  <XAxis
-                    dataKey="year"
-                    ticks={xAxisTicks}
-                    tick={{ fontSize: 11 }}
-                  />
+                  <XAxis dataKey="year" ticks={xAxisTicks} tick={{ fontSize: 11 }} />
                   <YAxis
                     tick={{ fontSize: 10 }}
                     width={52}
@@ -365,21 +356,17 @@ export default function AnalysisPanel() {
             </div>
           </div>
 
-          {/* Cases by Sex */}
+          {/* Cases by Gender — renamed from "Cases by Sex" */}
           <div className="rounded-lg border p-4">
             <div className="flex items-start justify-between gap-2 mb-4">
-              <h3 className="font-semibold">Cases by Sex</h3>
+              <h3 className="font-semibold">Cases by Gender</h3>
               <span className="text-xs text-gray-400">Female vs Male · observed</span>
             </div>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sexChartData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                <BarChart data={genderChartData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="year"
-                    ticks={xAxisTicks}
-                    tick={{ fontSize: 11 }}
-                  />
+                  <XAxis dataKey="year" ticks={xAxisTicks} tick={{ fontSize: 11 }} />
                   <YAxis
                     tick={{ fontSize: 10 }}
                     width={52}
@@ -411,7 +398,7 @@ export default function AnalysisPanel() {
           </div>
         </div>
 
-        {/* ── FIX 2: Disease Distribution — NO labels on pie slices ── */}
+        {/* Disease Distribution — no labels on pie */}
         <div className="rounded-lg border p-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <div>
@@ -429,21 +416,16 @@ export default function AnalysisPanel() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-              {/* Pie — no labels, no labelLine */}
               <div className="w-full h-[220px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={displayedDiseaseData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={90}
-                      innerRadius={40}
+                      dataKey="value" nameKey="name"
+                      cx="50%" cy="50%"
+                      outerRadius={90} innerRadius={40}
                       paddingAngle={3}
-                      label={false}
-                      labelLine={false}
+                      label={false} labelLine={false}
                       onClick={(d) => {
                         if (!d?.name) return;
                         setSelectedDisease((p) => p === d.name ? "All" : d.name);
@@ -467,7 +449,6 @@ export default function AnalysisPanel() {
                 </ResponsiveContainer>
               </div>
 
-              {/* Legend list */}
               <div className="grid gap-1.5 max-h-56 overflow-auto pr-1">
                 {displayedDiseaseData.map((d, i) => (
                   <button
@@ -478,10 +459,7 @@ export default function AnalysisPanel() {
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="w-3 h-3 rounded-sm flex-shrink-0"
-                        style={{ background: COLORS[i % COLORS.length] }}
-                      />
+                      <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
                       <span className="text-sm font-medium truncate">{d.name}</span>
                     </div>
                     <span className="text-sm font-semibold text-gray-800 ml-2 flex-shrink-0">
@@ -494,14 +472,13 @@ export default function AnalysisPanel() {
           )}
         </div>
 
-        {/* ── FIX 3: Outbreak Risk Indicators — shorter labels + tighter margins ── */}
+        {/* Outbreak Risk Indicators */}
         <div className="rounded-lg border p-4">
           <h3 className="font-semibold mb-3">Outbreak Risk Indicators</h3>
           <div className="h-[200px] sm:h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={riskFactors}
-                layout="vertical"
+                data={riskFactors} layout="vertical"
                 margin={{ top: 4, right: 36, left: 0, bottom: 4 }}
               >
                 <defs>
@@ -510,23 +487,15 @@ export default function AnalysisPanel() {
                     <stop offset="100%" stopColor="#60A5FA" />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
                 <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={80}
-                  tick={{ fontSize: 10 }}
-                  tickLine={true}
+                  type="category" dataKey="name"
+                  width={110} tick={{ fontSize: 10 }} tickLine={false}
                 />
                 <Tooltip formatter={(v) => [`${v}%`, "Score"]} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="url(#blueGrad)">
-                  <LabelList
-                    dataKey="value"
-                    position="right"
-                    fontSize={10}
-                    formatter={(v) => `${v}%`}
-                  />
+                  <LabelList dataKey="value" position="right" fontSize={10} formatter={(v) => `${v}%`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
