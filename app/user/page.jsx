@@ -409,7 +409,7 @@ export default function UserPage() {
             title="AI Assistant"
           >
             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 animate-pulse" />
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
               <rect x="5" y="8" width="14" height="10" rx="2" fill="white" stroke="white" strokeWidth="1.2" />
               <circle cx="9.5" cy="12.5" r="1" fill="#6366F1" />
               <circle cx="14.5" cy="12.5" r="1" fill="#6366F1" />
@@ -417,12 +417,13 @@ export default function UserPage() {
               <rect x="10.5" y="5" width="3" height="3" rx="0.8" fill="#C7D2FE" stroke="#6366F1" strokeWidth="0.8" />
             </svg>
           </motion.button>
+          
         </div>
 
         {/* Date Selection Row */}
         <div
           ref={daysRowRef}
-          className="flex gap-2 h-16 pt-1.5 sm:gap-3 overflow-x-auto pb-4 mb-6 scroll-smooth"
+          className="flex gap-2 lg:h-20 sm:h-20 h-16 sm:gap-4 sm:h-16 pt-1.5 sm:gap-3 overflow-x-auto pb-4 mb-6 scroll-smooth"
           style={{ scrollbarWidth: "thin" }}
         >
           {currentDays.map((day) => (
