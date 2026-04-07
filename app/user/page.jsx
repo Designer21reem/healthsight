@@ -2,14 +2,26 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-} from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../lib/supabaseClient";
 import { HealthService } from "../../lib/healthService";
 import Header from "../../components/Layout/HeaderUser";
+
+// Dynamic import for recharts to avoid SSR issues
+import dynamic from 'next/dynamic';
+
+const Radar = dynamic(() => import('recharts').then(mod => mod.Radar), { ssr: false });
+const RadarChart = dynamic(() => import('recharts').then(mod => mod.RadarChart), { ssr: false });
+const PolarGrid = dynamic(() => import('recharts').then(mod => mod.PolarGrid), { ssr: false });
+const PolarAngleAxis = dynamic(() => import('recharts').then(mod => mod.PolarAngleAxis), { ssr: false });
+const PolarRadiusAxis = dynamic(() => import('recharts').then(mod => mod.PolarRadiusAxis), { ssr: false });
+const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
+const LineChart = dynamic(() => import('recharts').then(mod => mod.LineChart), { ssr: false });
+const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false });
+const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false });
 
 export default function UserPage() {
   const router = useRouter();
@@ -222,17 +234,16 @@ export default function UserPage() {
     const found = moodData.find((d) => d.day === label || d.shortDay === label);
     const dayData = found ? dailyData[found.date] : null;
     return (
-      <motion.div initial={{ opacity:0, scale:0.8 }} animate={{ opacity:1, scale:1 }}
-        className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm text-xs sm:text-sm">
+      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
         <p className="text-sm font-semibold text-gray-800">{found?.day || label}</p>
-        <p className="text-xs sm:text-sm text-indigo-600">Mood: <span className="font-semibold">{payload[0].value}/10</span></p>
+        <p className="text-sm text-indigo-600">Mood: <span className="font-semibold">{payload[0].value}/10</span></p>
         {dayData && (
           <>
-            <p className="text-xs text-blue-500">Sleep: {dayData.sleep}/10</p>
-            <p className="text-xs text-yellow-500">Energy: {dayData.energy}/10</p>
+            <p className="text-sm text-blue-500">Sleep: {dayData.sleep}/10</p>
+            <p className="text-sm text-yellow-500">Energy: {dayData.energy}/10</p>
           </>
         )}
-      </motion.div>
+      </div>
     );
   };
 
@@ -299,13 +310,10 @@ export default function UserPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
         <LoadingOverlay />
-        <motion.div initial={{ opacity:0, y:50 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.6 }}
-          className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
           <div className="text-center mb-8">
-            <motion.div initial={{ scale:0.5 }} animate={{ scale:1 }} transition={{ delay:0.2, type:"spring" }}
-              className="text-2xl font-bold text-gray-800 mb-2">HealthSight</motion.div>
-            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.4 }}
-              className="text-gray-600">Let's learn about your health today</motion.div>
+            <div className="text-2xl font-bold text-gray-800 mb-2">HealthSight</div>
+            <div className="text-gray-600">Let's learn about your health today</div>
           </div>
           <div className="mb-6">
             <div className="flex justify-between text-sm text-gray-500 mb-2">
@@ -313,35 +321,28 @@ export default function UserPage() {
               <span>{currentQuestion + 1} / {questions.length}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <motion.div initial={{ width:0 }}
-                animate={{ width:`${((currentQuestion + 1) / questions.length) * 100}%` }}
-                transition={{ duration:0.5 }}
-                className="bg-green-500 h-2 rounded-full" />
+              <div className="bg-green-500 h-2 rounded-full" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }} />
             </div>
           </div>
           <div className="text-center mb-8">
-            <motion.div key={currentQuestion} initial={{ opacity:0, x:20 }} animate={{ opacity:1, x:0 }}
-              exit={{ opacity:0, x:-20 }} className="text-xl font-semibold text-gray-800 mb-4">
+            <div className="text-xl font-semibold text-gray-800 mb-4">
               {questions[currentQuestion].question}
-            </motion.div>
-            <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-2 gap-4">
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               {questions[currentQuestion].options.map((option, index) => (
-                <motion.button key={index} variants={itemVariants} whileHover={{ scale:1.05 }} whileTap={{ scale:0.95 }}
+                <button key={index}
                   onClick={() => handleAnswer(option.value, questions[currentQuestion].type)}
                   className="flex flex-col items-center p-4 border-2 border-gray-100 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all duration-200">
-                  <motion.span initial={{ scale:0 }} animate={{ scale:1 }} transition={{ delay:index * 0.1 }} className="text-3xl mb-2">
-                    {option.emoji}
-                  </motion.span>
+                  <span className="text-3xl mb-2">{option.emoji}</span>
                   <span className="text-sm font-medium text-gray-700">{option.text}</span>
-                </motion.button>
+                </button>
               ))}
-            </motion.div>
+            </div>
           </div>
-          <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.8 }}
-            className="text-center text-sm text-gray-500">
+          <div className="text-center text-sm text-gray-500">
             Choose the answer that best describes your day
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -361,38 +362,20 @@ export default function UserPage() {
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-4 sm:py-8">
         {/* Header section with title and assistant button */}
-        <motion.div 
-          initial={{ opacity:0, y:-20 }} 
-          animate={{ opacity:1, y:0 }} 
-          transition={{ delay:0.4 }}
-          className="flex flex-row items-center justify-between mb-4 sm:mb-6"
-        >
+        <div className="flex flex-row items-center justify-between mb-4 sm:mb-6">
           <div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-800">Your Daily Statistics</h2>
             <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{formatMonthYear(selectedDate || new Date().toISOString())}</p>
           </div>
           
-          {/* Assistant Button - moved here from header */}
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            animate={{ y: [0, -3, 0], rotate: [0, 2, -2, 0] }}
-            transition={{
-              duration: 3,
-              repeat: Infinity,
-              repeatType: "loop",
-              ease: "easeInOut",
-            }}
+          {/* Assistant Button */}
+          <button
             onClick={() => router.push("/assistant")}
             className="relative flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 hover:shadow-lg transition-all duration-300"
             aria-label="Open AI Assistant"
             title="AI Assistant"
           >
-            <motion.span
-              className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-400"
-              animate={{ scale: [1, 1.5, 1], opacity: [0.9, 0.3, 0.9] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-            />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <rect x="5" y="8" width="14" height="10" rx="2" fill="white" stroke="white" strokeWidth="1.2" />
               <circle cx="9.5" cy="12.5" r="1" fill="#6366F1" />
@@ -400,55 +383,41 @@ export default function UserPage() {
               <path d="M9 16H15" stroke="#6366F1" strokeWidth="1.2" strokeLinecap="round" />
               <rect x="10.5" y="5" width="3" height="3" rx="0.8" fill="#C7D2FE" stroke="#6366F1" strokeWidth="0.8" />
             </svg>
-          </motion.button>
-        </motion.div>
+          </button>
+        </div>
 
-        {/* Days row - improved for mobile */}
-        <motion.div 
-          ref={daysRowRef} 
-          tabIndex={0} 
-          role="listbox" 
-          aria-label="Select day"
-          variants={containerVariants} 
-          initial="hidden" 
-          animate="visible"
-          className="hide-scrollbar outline-none flex gap-2 sm:gap-3 overflow-x-auto pb-3 mb-5 sm:mb-6 pt-2 snap-x snap-mandatory scroll-smooth touch-pan-x overscroll-x-contain"
-        >
+        {/* Days row */}
+        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-3 mb-5 sm:mb-6 pt-2">
           {currentDays.map((day) => (
-            <motion.button 
+            <button 
               key={day.date} 
-              variants={itemVariants} 
-              whileHover={{ scale:1.05 }} 
-              whileTap={{ scale:0.95 }}
               onClick={() => setSelectedDate(day.date)}
               className={`snap-center relative flex-none w-12 h-12 sm:w-14 sm:h-14 rounded-full flex flex-col items-center justify-center text-xs shadow-sm transition-all ${
                 selectedDate === day.date ? "bg-white border-2 border-indigo-200 text-slate-900 shadow-md" : "bg-gray-100 text-gray-500"
               } ${day.isToday ? "ring-2 ring-green-400" : ""}`}
-              aria-pressed={selectedDate === day.date}>
+            >
               <span className="text-sm sm:text-base font-bold">{day.day}</span>
               <span className="text-[10px] sm:text-xs mt-0.5">{day.label}</span>
               {day.isToday && (
-                <motion.div initial={{ scale:0 }} animate={{ scale:1 }}
-                  className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full" />
               )}
-            </motion.button>
+            </button>
           ))}
-        </motion.div>
+        </div>
 
-        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-12">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-12">
 
           {/* Overall Score Card */}
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 shadow-sm mb-4 sm:mb-6">
+          <div className="md:col-span-12 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 shadow-sm mb-4 sm:mb-6">
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 mb-1 sm:mb-2">
                   <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-pink-400" />
                   Overall Health Score — {formatDisplayDate(selectedDate)}
                 </div>
-                <motion.div key={getSelectedHealthScore()} initial={{ scale:0 }} animate={{ scale:1 }} transition={{ delay:0.2, type:"spring" }}
-                  className="text-3xl sm:text-5xl font-extrabold text-green-500 mb-1 sm:mb-2">
+                <div className="text-3xl sm:text-5xl font-extrabold text-green-500 mb-1 sm:mb-2">
                   {getSelectedHealthScore()}
-                </motion.div>
+                </div>
                 <div className="text-base sm:text-lg font-semibold text-gray-800 mb-0.5 sm:mb-1">
                   {getSelectedHealthScore() >= 90 ? "Excellent" : getSelectedHealthScore() >= 80 ? "Very Good" : getSelectedHealthScore() >= 70 ? "Good" : "Needs Improvement"}
                 </div>
@@ -456,123 +425,141 @@ export default function UserPage() {
                   {selectedDate === currentDays[currentDays.length - 1]?.date ? "Based on your daily assessment" : "Historical data"}
                 </p>
               </div>
-              <motion.div whileHover={{ rotate:360 }} transition={{ duration:0.5 }}
-                className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-green-50 rounded-full">
-                <svg width="24" height="24" sm:width="28" sm:height="28" viewBox="0 0 24 24" fill="none">
+              <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-green-50 rounded-full">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                   <path d="M3 12l4 4 8-8 6 6" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </motion.div>
+              </div>
             </div>
-          </motion.section>
+          </div>
 
           {/* Metrics Grid */}
-          <motion.section variants={cardVariants} className="md:col-span-12 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+          <div className="md:col-span-12 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <Metric title="Mood" value={`${currentData.mood}/10`} color="bg-pink-500" progress={currentData.mood * 10} />
-              <Metric title="Sleep" value={`${currentData.sleep}/10`} color="bg-blue-500" progress={currentData.sleep * 10} />
-              <Metric title="Energy" value={`${currentData.energy}/10`} color="bg-yellow-500" progress={currentData.energy * 10} />
-              <Metric title="Exercise" value={`${currentData.exercise} min`} color="bg-green-500" progress={Math.min(100,(Number(currentData.exercise||0)/60)*100)} />
+              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-pink-500" />
+                    <div className="text-xs sm:text-sm font-medium text-gray-700">Mood</div>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.mood}/10</div>
+                </div>
+                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-pink-500 rounded-full" style={{ width: `${currentData.mood * 10}%` }} />
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500" />
+                    <div className="text-xs sm:text-sm font-medium text-gray-700">Sleep</div>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.sleep}/10</div>
+                </div>
+                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${currentData.sleep * 10}%` }} />
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-yellow-500" />
+                    <div className="text-xs sm:text-sm font-medium text-gray-700">Energy</div>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.energy}/10</div>
+                </div>
+                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${currentData.energy * 10}%` }} />
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500" />
+                    <div className="text-xs sm:text-sm font-medium text-gray-700">Exercise</div>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.exercise} min</div>
+                </div>
+                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (currentData.exercise / 60) * 100)}%` }} />
+                </div>
+              </div>
             </div>
-          </motion.section>
+          </div>
 
-          {/* Radar Chart - Full width on mobile */}
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 lg:col-span-4 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+          {/* Radar Chart */}
+          <div className="md:col-span-12 lg:col-span-4 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">Mental Health Radar</h3>
             <p className="text-xs text-gray-500 mb-3 sm:mb-4">Your current mental wellness profile</p>
             <div className="w-full h-48 sm:h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                   <PolarGrid />
-                  <PolarAngleAxis dataKey="subject" tick={{ fontSize:10, fill:"#6B7280" }} />
-                  <PolarRadiusAxis angle={30} domain={[0,100]} tick={{ fontSize:9, fill:"#9CA3AF" }} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#6B7280" }} />
+                  <PolarRadiusAxis angle={30} domain={[0,100]} tick={{ fontSize: 9, fill: "#9CA3AF" }} />
                   <Radar name="Mental Health" dataKey="A" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.3} strokeWidth={1.5} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
-          </motion.section>
+          </div>
 
-          {/* Line Chart - Improved for mobile */}
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 lg:col-span-5 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+          {/* Line Chart */}
+          <div className="md:col-span-12 lg:col-span-5 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">7-Day Mood Trend</h3>
             <p className="text-xs text-gray-500 mb-3 sm:mb-4">Your mood over the past week</p>
             <div className="w-full h-48 sm:h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={moodData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="shortDay" 
-                    tick={{ fontSize: 10, fill: "#6B7280" }} 
-                    axisLine={false}
-                    tickLine={false}
-                    interval={0}
-                  />
-                  <YAxis 
-                    domain={[0,10]} 
-                    tick={{ fontSize: 9, fill: "#9CA3AF" }} 
-                    axisLine={false}
-                    tickLine={false}
-                    width={25}
-                  />
+                  <XAxis dataKey="shortDay" tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} interval={0} />
+                  <YAxis domain={[0,10]} tick={{ fontSize: 9, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={25} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Line 
-                    type="monotone" 
-                    dataKey="mood" 
-                    stroke="#4F46E5" 
-                    strokeWidth={2}
-                    dot={{ fill: "#4F46E5", strokeWidth: 1.5, r: 3 }}
-                    activeDot={{ r: 5, fill: "#4F46E5" }} 
-                  />
+                  <Line type="monotone" dataKey="mood" stroke="#4F46E5" strokeWidth={2} dot={{ fill: "#4F46E5", strokeWidth: 1.5, r: 3 }} activeDot={{ r: 5, fill: "#4F46E5" }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </motion.section>
+          </div>
 
           {/* Habits Tracker */}
-          <motion.section variants={cardVariants} whileHover="hover" className="md:col-span-12 lg:col-span-3 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
+          <div className="md:col-span-12 lg:col-span-3 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
             <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">Daily Habits Tracker</h3>
             <p className="text-xs text-gray-500 mb-3 sm:mb-4">Monitor your physical health habits</p>
-            <Habit name="Water Intake" value={`${currentData.water} glasses`} goal="10 glasses/day" color="bg-blue-500" percent={Math.min(100,(Number(currentData.water||0)/10)*100)} />
-            <Habit name="Exercise" value={`${currentData.exercise} min`} goal="60 min/day" color="bg-green-500" percent={Math.min(100,(Number(currentData.exercise||0)/60)*100)} />
-            <Habit name="Meals" value={`${currentData.meals} meals`} goal="4 meals/day" color="bg-orange-500" percent={Math.min(100,(Number(currentData.meals||0)/4)*100)} />
-          </motion.section>
-        </motion.div>
+            
+            <div className="mb-3 sm:mb-4">
+              <div className="flex items-center justify-between mb-1 sm:mb-2">
+                <div className="text-xs sm:text-sm font-medium text-gray-700">Water Intake</div>
+                <div className="text-xs sm:text-sm font-semibold text-gray-900">{currentData.water} glasses</div>
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: 10 glasses/day</div>
+              <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, (currentData.water / 10) * 100)}%` }} />
+              </div>
+            </div>
+
+            <div className="mb-3 sm:mb-4">
+              <div className="flex items-center justify-between mb-1 sm:mb-2">
+                <div className="text-xs sm:text-sm font-medium text-gray-700">Exercise</div>
+                <div className="text-xs sm:text-sm font-semibold text-gray-900">{currentData.exercise} min</div>
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: 60 min/day</div>
+              <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (currentData.exercise / 60) * 100)}%` }} />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1 sm:mb-2">
+                <div className="text-xs sm:text-sm font-medium text-gray-700">Meals</div>
+                <div className="text-xs sm:text-sm font-semibold text-gray-900">{currentData.meals} meals</div>
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: 4 meals/day</div>
+              <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-orange-500 rounded-full" style={{ width: `${(currentData.meals / 4) * 100}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
-  );
-}
-
-function Metric({ title, value, color = "bg-blue-500", progress = 60 }) {
-  return (
-    <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} whileHover={{ scale:1.02 }}
-      className="bg-gray-50 rounded-xl p-3 sm:p-4 min-w-0">
-      <div className="flex items-center justify-between mb-2 sm:mb-3">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <motion.span whileHover={{ scale:1.2 }} className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full ${color}`} />
-          <div className="text-xs sm:text-sm font-medium text-gray-700">{title}</div>
-        </div>
-        <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ delay:0.2 }}
-          className="text-sm sm:text-base font-bold text-gray-900">{value}</motion.div>
-      </div>
-      <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-        <motion.div initial={{ width:0 }} animate={{ width:`${progress}%` }} transition={{ duration:1, delay:0.3 }}
-          className={`h-full ${color} rounded-full`} />
-      </div>
-    </motion.div>
-  );
-}
-
-function Habit({ name, value, goal, color = "bg-blue-500", percent = 50 }) {
-  return (
-    <motion.div initial={{ opacity:0, x:-20 }} animate={{ opacity:1, x:0 }} className="mb-3 sm:mb-4">
-      <div className="flex items-center justify-between mb-1 sm:mb-2">
-        <div className="text-xs sm:text-sm font-medium text-gray-700">{name}</div>
-        <motion.div whileHover={{ scale:1.05 }} className="text-xs sm:text-sm font-semibold text-gray-900">{value}</motion.div>
-      </div>
-      <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: {goal}</div>
-      <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-        <motion.div initial={{ width:0 }} animate={{ width:`${percent}%` }} transition={{ duration:1, delay:0.3 }}
-          className={`h-full ${color} rounded-full`} />
-      </div>
-    </motion.div>
   );
 }
