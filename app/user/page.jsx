@@ -7,21 +7,73 @@ import { supabase } from "../../lib/supabaseClient";
 import { HealthService } from "../../lib/healthService";
 import Header from "../../components/Layout/HeaderUser";
 
-// Dynamic import for recharts to avoid SSR issues
-import dynamic from 'next/dynamic';
+// shadcn/ui components
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
-const Radar = dynamic(() => import('recharts').then(mod => mod.Radar), { ssr: false });
-const RadarChart = dynamic(() => import('recharts').then(mod => mod.RadarChart), { ssr: false });
-const PolarGrid = dynamic(() => import('recharts').then(mod => mod.PolarGrid), { ssr: false });
-const PolarAngleAxis = dynamic(() => import('recharts').then(mod => mod.PolarAngleAxis), { ssr: false });
-const PolarRadiusAxis = dynamic(() => import('recharts').then(mod => mod.PolarRadiusAxis), { ssr: false });
-const ResponsiveContainer = dynamic(() => import('recharts').then(mod => mod.ResponsiveContainer), { ssr: false });
-const LineChart = dynamic(() => import('recharts').then(mod => mod.LineChart), { ssr: false });
-const Line = dynamic(() => import('recharts').then(mod => mod.Line), { ssr: false });
-const XAxis = dynamic(() => import('recharts').then(mod => mod.XAxis), { ssr: false });
-const YAxis = dynamic(() => import('recharts').then(mod => mod.YAxis), { ssr: false });
-const CartesianGrid = dynamic(() => import('recharts').then(mod => mod.CartesianGrid), { ssr: false });
-const Tooltip = dynamic(() => import('recharts').then(mod => mod.Tooltip), { ssr: false });
+// recharts components (wrapped by shadcn)
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+} from "recharts";
+
+// Helper function to get last 7 days
+const getLast7Days = () => {
+  const days = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(today.getDate() - i);
+    days.push({
+      date: date.toISOString().split("T")[0],
+      day: date.getDate(),
+      label: date.toLocaleDateString("en-US", { weekday: "short" }),
+      month: date.toLocaleDateString("en-US", { month: "short" }),
+      isToday: i === 0,
+      fullDate: date,
+    });
+  }
+  return days;
+};
+
+// Chart Configurations
+const radarChartConfig = {
+  score: {
+    label: "Health Score",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig;
+
+const moodChartConfig = {
+  mood: {
+    label: "Mood Score",
+    color: "hsl(var(--chart-2))",
+  },
+} satisfies ChartConfig;
 
 export default function UserPage() {
   const router = useRouter();
@@ -43,25 +95,6 @@ export default function UserPage() {
   const presenceIntervalRef = useRef(null);
   const isPresenceStartedRef = useRef(false);
   const beforeUnloadHandlerRef = useRef(null);
-
-  const getLast7Days = () => {
-    const days = [];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(today.getDate() - i);
-      days.push({
-        date: date.toISOString().split("T")[0],
-        day: date.getDate(),
-        label: date.toLocaleDateString("en-US", { weekday: "short" }),
-        month: date.toLocaleDateString("en-US", { month: "short" }),
-        isToday: i === 0,
-        isYesterday: i === 1,
-        fullDate: date,
-      });
-    }
-    return days;
-  };
 
   const formatDisplayDate = (dateStr) => {
     const date = new Date(dateStr);
@@ -120,32 +153,15 @@ export default function UserPage() {
   async function initializePage() {
     try {
       setLoading(true);
-      
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !session) { 
-        router.push("/"); 
-        return; 
-      }
-      
+      if (sessionError || !session) { router.push("/"); return; }
       setUser(session.user);
 
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .maybeSingle();
-      
-      if (profileError) {
-        console.error("Profile fetch error:", profileError);
-      }
-      
+      const { data: profileData } = await supabase
+        .from("profiles").select("*").eq("id", session.user.id).single();
       setProfile(profileData || null);
 
-      if (profileData?.role === "admin") { 
-        router.push("/admin"); 
-        return; 
-      }
+      if (profileData?.role === "admin") { router.push("/admin"); return; }
 
       await startPresenceHeartbeat(session.user.id);
 
@@ -183,7 +199,7 @@ export default function UserPage() {
       });
       days.forEach((day) => {
         if (!newDailyData[day.date])
-          newDailyData[day.date] = { mood:7, sleep:7, energy:7, nutrition:7, exercise:35, healthScore:75, water:8, meals:3 };
+          newDailyData[day.date] = { mood: 7, sleep: 7, energy: 7, nutrition: 7, exercise: 35, healthScore: 75, water: 8, meals: 3 };
       });
       setDailyData(newDailyData);
     } catch (err) { console.error("Error loading database data:", err); }
@@ -200,56 +216,36 @@ export default function UserPage() {
   };
 
   const questions = [
-    { id:1, question:"How are you feeling today?", type:"mood", options:[{emoji:"😢",text:"Bad",value:3},{emoji:"😐",text:"Okay",value:6},{emoji:"😊",text:"Good",value:8},{emoji:"🤩",text:"Excellent",value:10}] },
-    { id:2, question:"How was your sleep quality?", type:"sleep", options:[{emoji:"😴",text:"Poor",value:4},{emoji:"🛌",text:"Average",value:7},{emoji:"💤",text:"Good",value:9},{emoji:"🌟",text:"Excellent",value:10}] },
-    { id:3, question:"What's your energy level today?", type:"energy", options:[{emoji:"😫",text:"Low",value:4},{emoji:"😌",text:"Medium",value:7},{emoji:"💪",text:"Good",value:9},{emoji:"⚡️",text:"High",value:10}] },
-    { id:4, question:"How many minutes did you exercise today?", type:"exercise", options:[{emoji:"🚶",text:"0-15 min",value:15},{emoji:"🏃",text:"16-30 min",value:30},{emoji:"💪",text:"31-45 min",value:45},{emoji:"🔥",text:"45+ min",value:60}] },
-    { id:5, question:"How was your food intake today?", type:"nutrition", options:[{emoji:"🍔",text:"Unhealthy",value:4},{emoji:"🥗",text:"Average",value:7},{emoji:"🍎",text:"Healthy",value:9},{emoji:"🌈",text:"Excellent",value:10}] },
-    { id:6, question:"How many glasses of water did you drink?", type:"water", options:[{emoji:"🥤",text:"0-3",value:3},{emoji:"💧",text:"4-6",value:6},{emoji:"🚰",text:"7-9",value:9},{emoji:"🌊",text:"10+",value:10}] },
-    { id:7, question:"How many meals did you have today?", type:"meals", options:[{emoji:"🍽️",text:"1 meal",value:1},{emoji:"🥪",text:"2 meals",value:2},{emoji:"🍛",text:"3 meals",value:3},{emoji:"🍱",text:"4+ meals",value:4}] },
+    { id: 1, question: "How are you feeling today?", type: "mood", options: [{ emoji: "😢", text: "Bad", value: 3 }, { emoji: "😐", text: "Okay", value: 6 }, { emoji: "😊", text: "Good", value: 8 }, { emoji: "🤩", text: "Excellent", value: 10 }] },
+    { id: 2, question: "How was your sleep quality?", type: "sleep", options: [{ emoji: "😴", text: "Poor", value: 4 }, { emoji: "🛌", text: "Average", value: 7 }, { emoji: "💤", text: "Good", value: 9 }, { emoji: "🌟", text: "Excellent", value: 10 }] },
+    { id: 3, question: "What's your energy level today?", type: "energy", options: [{ emoji: "😫", text: "Low", value: 4 }, { emoji: "😌", text: "Medium", value: 7 }, { emoji: "💪", text: "Good", value: 9 }, { emoji: "⚡️", text: "High", value: 10 }] },
+    { id: 4, question: "How many minutes did you exercise today?", type: "exercise", options: [{ emoji: "🚶", text: "0-15 min", value: 15 }, { emoji: "🏃", text: "16-30 min", value: 30 }, { emoji: "💪", text: "31-45 min", value: 45 }, { emoji: "🔥", text: "45+ min", value: 60 }] },
+    { id: 5, question: "How was your food intake today?", type: "nutrition", options: [{ emoji: "🍔", text: "Unhealthy", value: 4 }, { emoji: "🥗", text: "Average", value: 7 }, { emoji: "🍎", text: "Healthy", value: 9 }, { emoji: "🌈", text: "Excellent", value: 10 }] },
+    { id: 6, question: "How many glasses of water did you drink?", type: "water", options: [{ emoji: "🥤", text: "0-3", value: 3 }, { emoji: "💧", text: "4-6", value: 6 }, { emoji: "🚰", text: "7-9", value: 9 }, { emoji: "🌊", text: "10+", value: 10 }] },
+    { id: 7, question: "How many meals did you have today?", type: "meals", options: [{ emoji: "🍽️", text: "1 meal", value: 1 }, { emoji: "🥪", text: "2 meals", value: 2 }, { emoji: "🍛", text: "3 meals", value: 3 }, { emoji: "🍱", text: "4+ meals", value: 4 }] },
   ];
 
-  const getCurrentDayData = () => dailyData[selectedDate] || { mood:7,sleep:7,energy:7,nutrition:7,exercise:35,healthScore:75,water:8,meals:3 };
+  const getCurrentDayData = () => dailyData[selectedDate] || { mood: 7, sleep: 7, energy: 7, nutrition: 7, exercise: 35, healthScore: 75, water: 8, meals: 3 };
   const currentData = getCurrentDayData();
   const getSelectedHealthScore = () => dailyData[selectedDate]?.healthScore ?? 75;
 
+  // Data for Radar Chart
   const radarData = [
-    { subject:"Mood", A: currentData.mood * 10, fullMark:100 },
-    { subject:"Sleep", A: currentData.sleep * 10, fullMark:100 },
-    { subject:"Energy", A: currentData.energy * 10, fullMark:100 },
-    { subject:"Nutrition", A: currentData.nutrition * 10, fullMark:100 },
-    { subject:"Exercise", A: currentData.exercise, fullMark:100 },
+    { subject: "Mood", score: currentData.mood * 10, fullMark: 100 },
+    { subject: "Sleep", score: currentData.sleep * 10, fullMark: 100 },
+    { subject: "Energy", score: currentData.energy * 10, fullMark: 100 },
+    { subject: "Nutrition", score: currentData.nutrition * 10, fullMark: 100 },
+    { subject: "Exercise", score: Math.min(100, currentData.exercise), fullMark: 100 },
   ];
 
+  // Data for Mood Trend Chart
   const moodData = currentDays.map((day) => ({
-    day: `${day.month} ${day.day}`,
-    shortDay: day.label,
+    day: day.label,
+    fullDay: `${day.month} ${day.day}`,
     date: day.date,
     mood: dailyData[day.date]?.mood ?? 7,
     isToday: day.isToday,
   }));
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    const found = moodData.find((d) => d.day === label || d.shortDay === label);
-    const dayData = found ? dailyData[found.date] : null;
-    return (
-      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-sm">
-        <p className="text-sm font-semibold text-gray-800">{found?.day || label}</p>
-        <p className="text-sm text-indigo-600">Mood: <span className="font-semibold">{payload[0].value}/10</span></p>
-        {dayData && (
-          <>
-            <p className="text-sm text-blue-500">Sleep: {dayData.sleep}/10</p>
-            <p className="text-sm text-yellow-500">Energy: {dayData.energy}/10</p>
-          </>
-        )}
-      </div>
-    );
-  };
-
-  const containerVariants = { hidden:{ opacity:0 }, visible:{ opacity:1, transition:{ staggerChildren:0.1 } } };
-  const itemVariants = { hidden:{ opacity:0, y:20 }, visible:{ opacity:1, y:0, transition:{ duration:0.5 } } };
-  const cardVariants = { hidden:{ opacity:0, scale:0.8 }, visible:{ opacity:1, scale:1, transition:{ duration:0.4 } }, hover:{ scale:1.02, transition:{ duration:0.2 } } };
 
   const finishAndSave = async (newAnswers) => {
     try {
@@ -267,7 +263,9 @@ export default function UserPage() {
       setCurrentDays(days);
       setSelectedDate(days[days.length - 1].date);
       await loadDatabaseData(user.id, days);
-      setShowQuestions(false); setAnswers({}); setCurrentQuestion(0);
+      setShowQuestions(false);
+      setAnswers({});
+      setCurrentQuestion(0);
       setLoading(false);
     } catch (err) {
       console.error("Error saving data:", err);
@@ -279,18 +277,29 @@ export default function UserPage() {
   const handleAnswer = async (value, type) => {
     const newAnswers = { ...answers, [type]: value };
     setAnswers(newAnswers);
-    if (currentQuestion < questions.length - 1) setCurrentQuestion(currentQuestion + 1);
-    else await finishAndSave(newAnswers);
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      await finishAndSave(newAnswers);
+    }
   };
 
   const LoadingOverlay = () => (
     <AnimatePresence>
       {(loading || logoutLoading) && (
-        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+        >
           <div className="absolute inset-0 bg-black/25" />
-          <motion.div initial={{ scale:0.92, opacity:0 }} animate={{ scale:1, opacity:1 }} exit={{ scale:0.92, opacity:0 }}
-            className="relative bg-white rounded-2xl shadow-xl px-8 py-7 flex flex-col items-center gap-4">
+          <motion.div
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.92, opacity: 0 }}
+            className="relative bg-white rounded-2xl shadow-xl px-8 py-7 flex flex-col items-center gap-4"
+          >
             <div className="w-14 h-14 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
             <div className="text-center">
               <div className="text-sm font-semibold text-gray-800">
@@ -306,14 +315,34 @@ export default function UserPage() {
     </AnimatePresence>
   );
 
+  // Questions Screen
   if (showQuestions) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
         <LoadingOverlay />
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full"
+        >
           <div className="text-center mb-8">
-            <div className="text-2xl font-bold text-gray-800 mb-2">HealthSight</div>
-            <div className="text-gray-600">Let's learn about your health today</div>
+            <motion.div
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring" }}
+              className="text-2xl font-bold text-gray-800 mb-2"
+            >
+              HealthSight
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-gray-600"
+            >
+              Let's learn about your health today
+            </motion.div>
           </div>
           <div className="mb-6">
             <div className="flex justify-between text-sm text-gray-500 mb-2">
@@ -321,34 +350,53 @@ export default function UserPage() {
               <span>{currentQuestion + 1} / {questions.length}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-green-500 h-2 rounded-full" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }} />
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+                transition={{ duration: 0.5 }}
+                className="bg-green-500 h-2 rounded-full"
+              />
             </div>
           </div>
           <div className="text-center mb-8">
-            <div className="text-xl font-semibold text-gray-800 mb-4">
+            <motion.div
+              key={currentQuestion}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="text-xl font-semibold text-gray-800 mb-4"
+            >
               {questions[currentQuestion].question}
-            </div>
+            </motion.div>
             <div className="grid grid-cols-2 gap-4">
               {questions[currentQuestion].options.map((option, index) => (
-                <button key={index}
+                <motion.button
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => handleAnswer(option.value, questions[currentQuestion].type)}
-                  className="flex flex-col items-center p-4 border-2 border-gray-100 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all duration-200">
+                  className="flex flex-col items-center p-4 border-2 border-gray-100 rounded-xl hover:border-green-300 hover:bg-green-50 transition-all duration-200"
+                >
                   <span className="text-3xl mb-2">{option.emoji}</span>
                   <span className="text-sm font-medium text-gray-700">{option.text}</span>
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
           <div className="text-center text-sm text-gray-500">
             Choose the answer that best describes your day
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
+  // Main Dashboard
   return (
-    <div className="min-h-screen bg-white text-slate-900 antialiased">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <LoadingOverlay />
 
       <Header
@@ -360,205 +408,166 @@ export default function UserPage() {
         showBackBtn={false}
       />
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-4 sm:py-8">
-        {/* Header section with title and assistant button */}
-        <div className="flex flex-row items-center justify-between mb-4 sm:mb-6">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8">
+        {/* Header with Title and Assistant Button */}
+        <div className="flex flex-row items-center justify-between mb-6 sm:mb-8">
           <div>
-            <h2 className="text-base sm:text-lg font-semibold text-gray-800">Your Daily Statistics</h2>
-            <p className="text-xs text-gray-500 mt-0.5 sm:mt-1">{formatMonthYear(selectedDate || new Date().toISOString())}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Welcome back, {profile?.full_name?.split(" ")[0] || "User"}!</h1>
+            <p className="text-sm text-gray-500 mt-1">Track your health journey</p>
           </div>
-          
-          {/* Assistant Button */}
-          <button
+
+          {/* Assistant Button with Wobble Animation */}
+          <motion.button
+            animate={{ y: [0, -5, 0], rotate: [0, 3, -3, 0] }}
+            transition={{
+              duration: 2.5,
+              repeat: Infinity,
+              repeatType: "loop",
+              ease: "easeInOut",
+              times: [0, 0.3, 0.6, 1],
+            }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => router.push("/assistant")}
-            className="relative flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 hover:shadow-lg transition-all duration-300"
+            className="relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 shadow-lg hover:shadow-xl transition-all duration-300"
             aria-label="Open AI Assistant"
             title="AI Assistant"
           >
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-400 animate-pulse" />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <rect x="5" y="8" width="14" height="10" rx="2" fill="white" stroke="white" strokeWidth="1.2" />
               <circle cx="9.5" cy="12.5" r="1" fill="#6366F1" />
               <circle cx="14.5" cy="12.5" r="1" fill="#6366F1" />
               <path d="M9 16H15" stroke="#6366F1" strokeWidth="1.2" strokeLinecap="round" />
               <rect x="10.5" y="5" width="3" height="3" rx="0.8" fill="#C7D2FE" stroke="#6366F1" strokeWidth="0.8" />
             </svg>
-          </button>
+          </motion.button>
         </div>
 
-        {/* Days row */}
-        <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-3 mb-5 sm:mb-6 pt-2">
+        {/* Date Selection Row */}
+        <div
+          ref={daysRowRef}
+          className="flex gap-2 sm:gap-3 overflow-x-auto pb-4 mb-6 scroll-smooth"
+          style={{ scrollbarWidth: "thin" }}
+        >
           {currentDays.map((day) => (
-            <button 
-              key={day.date} 
+            <button
+              key={day.date}
               onClick={() => setSelectedDate(day.date)}
-              className={`snap-center relative flex-none w-12 h-12 sm:w-14 sm:h-14 rounded-full flex flex-col items-center justify-center text-xs shadow-sm transition-all ${
-                selectedDate === day.date ? "bg-white border-2 border-indigo-200 text-slate-900 shadow-md" : "bg-gray-100 text-gray-500"
+              className={`flex-none flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-2xl transition-all duration-200 ${
+                selectedDate === day.date
+                  ? "bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-lg scale-105"
+                  : "bg-white text-gray-600 hover:bg-gray-50 shadow-sm"
               } ${day.isToday ? "ring-2 ring-green-400" : ""}`}
             >
-              <span className="text-sm sm:text-base font-bold">{day.day}</span>
-              <span className="text-[10px] sm:text-xs mt-0.5">{day.label}</span>
-              {day.isToday && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full" />
-              )}
+              <span className="text-xs sm:text-sm font-medium">{day.label}</span>
+              <span className="text-lg sm:text-xl font-bold">{day.day}</span>
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-12">
+        {/* Overall Health Score Card */}
+        <Card className="mb-6 bg-gradient-to-r from-indigo-50 to-purple-50 border-none shadow-md">
+          <CardHeader className="pb-2">
+            <CardDescription>Overall Health Score — {formatDisplayDate(selectedDate)}</CardDescription>
+            <CardTitle className="text-4xl sm:text-5xl text-green-600">{getSelectedHealthScore()}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg font-semibold">
+              {getSelectedHealthScore() >= 90 ? "Excellent" : getSelectedHealthScore() >= 80 ? "Very Good" : getSelectedHealthScore() >= 70 ? "Good" : "Needs Improvement"}
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {selectedDate === currentDays[currentDays.length - 1]?.date ? "Based on your daily assessment" : "Historical data"}
+            </p>
+          </CardContent>
+        </Card>
 
-          {/* Overall Score Card */}
-          <div className="md:col-span-12 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 sm:p-6 shadow-sm mb-4 sm:mb-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 mb-1 sm:mb-2">
-                  <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-pink-400" />
-                  Overall Health Score — {formatDisplayDate(selectedDate)}
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          {[
+            { title: "Mood", value: `${currentData.mood}/10`, color: "from-pink-400 to-pink-500", progress: currentData.mood * 10 },
+            { title: "Sleep", value: `${currentData.sleep}/10`, color: "from-blue-400 to-blue-500", progress: currentData.sleep * 10 },
+            { title: "Energy", value: `${currentData.energy}/10`, color: "from-yellow-400 to-yellow-500", progress: currentData.energy * 10 },
+            { title: "Exercise", value: `${currentData.exercise} min`, color: "from-green-400 to-green-500", progress: Math.min(100, (currentData.exercise / 60) * 100) },
+          ].map((metric, idx) => (
+            <Card key={idx} className="text-center shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-gray-500">{metric.title}</p>
+                <p className="text-lg sm:text-xl font-bold mt-1">{metric.value}</p>
+                <div className="w-full h-1.5 bg-gray-200 rounded-full mt-2 overflow-hidden">
+                  <div className={`h-full rounded-full bg-gradient-to-r ${metric.color}`} style={{ width: `${metric.progress}%` }} />
                 </div>
-                <div className="text-3xl sm:text-5xl font-extrabold text-green-500 mb-1 sm:mb-2">
-                  {getSelectedHealthScore()}
-                </div>
-                <div className="text-base sm:text-lg font-semibold text-gray-800 mb-0.5 sm:mb-1">
-                  {getSelectedHealthScore() >= 90 ? "Excellent" : getSelectedHealthScore() >= 80 ? "Very Good" : getSelectedHealthScore() >= 70 ? "Good" : "Needs Improvement"}
-                </div>
-                <p className="text-xs text-gray-500">
-                  {selectedDate === currentDays[currentDays.length - 1]?.date ? "Based on your daily assessment" : "Historical data"}
-                </p>
-              </div>
-              <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-green-50 rounded-full">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path d="M3 12l4 4 8-8 6 6" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          {/* Metrics Grid */}
-          <div className="md:col-span-12 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-pink-500" />
-                    <div className="text-xs sm:text-sm font-medium text-gray-700">Mood</div>
-                  </div>
-                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.mood}/10</div>
-                </div>
-                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-pink-500 rounded-full" style={{ width: `${currentData.mood * 10}%` }} />
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500" />
-                    <div className="text-xs sm:text-sm font-medium text-gray-700">Sleep</div>
-                  </div>
-                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.sleep}/10</div>
-                </div>
-                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${currentData.sleep * 10}%` }} />
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-yellow-500" />
-                    <div className="text-xs sm:text-sm font-medium text-gray-700">Energy</div>
-                  </div>
-                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.energy}/10</div>
-                </div>
-                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${currentData.energy * 10}%` }} />
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500" />
-                    <div className="text-xs sm:text-sm font-medium text-gray-700">Exercise</div>
-                  </div>
-                  <div className="text-sm sm:text-base font-bold text-gray-900">{currentData.exercise} min</div>
-                </div>
-                <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (currentData.exercise / 60) * 100)}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Radar Chart */}
-          <div className="md:col-span-12 lg:col-span-4 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">Mental Health Radar</h3>
-            <p className="text-xs text-gray-500 mb-3 sm:mb-4">Your current mental wellness profile</p>
-            <div className="w-full h-48 sm:h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#6B7280" }} />
-                  <PolarRadiusAxis angle={30} domain={[0,100]} tick={{ fontSize: 9, fill: "#9CA3AF" }} />
-                  <Radar name="Mental Health" dataKey="A" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.3} strokeWidth={1.5} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Line Chart */}
-          <div className="md:col-span-12 lg:col-span-5 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">7-Day Mood Trend</h3>
-            <p className="text-xs text-gray-500 mb-3 sm:mb-4">Your mood over the past week</p>
-            <div className="w-full h-48 sm:h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={moodData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="shortDay" tick={{ fontSize: 10, fill: "#6B7280" }} axisLine={false} tickLine={false} interval={0} />
-                  <YAxis domain={[0,10]} tick={{ fontSize: 9, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={25} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="mood" stroke="#4F46E5" strokeWidth={2} dot={{ fill: "#4F46E5", strokeWidth: 1.5, r: 3 }} activeDot={{ r: 5, fill: "#4F46E5" }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Habits Tracker */}
-          <div className="md:col-span-12 lg:col-span-3 bg-white rounded-xl p-4 sm:p-6 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">Daily Habits Tracker</h3>
-            <p className="text-xs text-gray-500 mb-3 sm:mb-4">Monitor your physical health habits</p>
-            
-            <div className="mb-3 sm:mb-4">
-              <div className="flex items-center justify-between mb-1 sm:mb-2">
-                <div className="text-xs sm:text-sm font-medium text-gray-700">Water Intake</div>
-                <div className="text-xs sm:text-sm font-semibold text-gray-900">{currentData.water} glasses</div>
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: 10 glasses/day</div>
-              <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, (currentData.water / 10) * 100)}%` }} />
-              </div>
-            </div>
-
-            <div className="mb-3 sm:mb-4">
-              <div className="flex items-center justify-between mb-1 sm:mb-2">
-                <div className="text-xs sm:text-sm font-medium text-gray-700">Exercise</div>
-                <div className="text-xs sm:text-sm font-semibold text-gray-900">{currentData.exercise} min</div>
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: 60 min/day</div>
-              <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (currentData.exercise / 60) * 100)}%` }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1 sm:mb-2">
-                <div className="text-xs sm:text-sm font-medium text-gray-700">Meals</div>
-                <div className="text-xs sm:text-sm font-semibold text-gray-900">{currentData.meals} meals</div>
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-500 mb-1 sm:mb-2">Goal: 4 meals/day</div>
-              <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-orange-500 rounded-full" style={{ width: `${(currentData.meals / 4) * 100}%` }} />
-              </div>
-            </div>
-          </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
+
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Radar Chart */}
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle>Mental Health Radar</CardTitle>
+              <CardDescription>Your current mental wellness profile</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={radarChartConfig} className="mx-auto aspect-square max-h-[280px]">
+                <RadarChart data={radarData}>
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <PolarGrid gridType="circle" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#6B7280" }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "#9CA3AF" }} />
+                  <Radar dataKey="score" fill="var(--color-score)" fillOpacity={0.5} stroke="var(--color-score)" strokeWidth={2} />
+                </RadarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* Mood Trend Line Chart */}
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle>7-Day Mood Trend</CardTitle>
+              <CardDescription>Your mood over the past week</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={moodChartConfig} className="h-[280px] w-full">
+                <LineChart data={moodData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#6B7280" }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} width={30} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line type="monotone" dataKey="mood" stroke="var(--color-mood)" strokeWidth={2.5} dot={{ r: 4, fill: "var(--color-mood)" }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Habits Tracker */}
+        <Card className="shadow-md">
+          <CardHeader>
+            <CardTitle>Daily Habits Tracker</CardTitle>
+            <CardDescription>Monitor your physical health habits</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {[
+              { name: "Water Intake", value: `${currentData.water} glasses`, goal: "10 glasses/day", percent: Math.min(100, (currentData.water / 10) * 100), color: "from-blue-400 to-blue-500" },
+              { name: "Exercise", value: `${currentData.exercise} min`, goal: "60 min/day", percent: Math.min(100, (currentData.exercise / 60) * 100), color: "from-green-400 to-green-500" },
+              { name: "Meals", value: `${currentData.meals} meals`, goal: "4 meals/day", percent: (currentData.meals / 4) * 100, color: "from-orange-400 to-orange-500" },
+            ].map((habit, idx) => (
+              <div key={idx}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm font-medium text-gray-700">{habit.name}</span>
+                  <span className="text-sm font-semibold text-gray-900">{habit.value}</span>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">Goal: {habit.goal}</p>
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full bg-gradient-to-r ${habit.color}`} style={{ width: `${habit.percent}%` }} />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
