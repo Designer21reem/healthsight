@@ -1,46 +1,102 @@
----
-title: Health Backend
-emoji: 🧠
-colorFrom: blue
-colorTo: purple
-sdk: docker
-pinned: false
----
+# Developing Predictive Models for Disease Outbreaks Using AI and Big Data
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Overview
 
-fix deploy
-## Getting Started
+This project is an intelligent web-based healthcare platform designed for disease outbreak prediction and personalized health monitoring.
 
-First, run the development server:
+The system combines machine learning, outbreak visualization, AI-powered assistance, and real-time analytics within a unified platform.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Disease outbreak prediction using AI models
+- Interactive outbreak visualization map
+- Health monitoring dashboard
+- Multi-agent AI healthcare chatbot
+- Real-time alerts and notifications
+- Medical article management system
+- Role-based access control (Admin/User)
+- Statistical outbreak classification using Z-Score
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Technologies Used
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Frontend
+- Next.js
+- Tailwind CSS
+- JavaScript
 
-## Learn More
+### Backend
+- FastAPI
+- Supabase
+- PostgreSQL
 
-To learn more about Next.js, take a look at the following resources:
+### Machine Learning
+- XGBoost
+- LightGBM
+- Scikit-learn
+- Pandas
+- NumPy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### AI Integration
+- OpenAI API
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Deployment
+- Vercel
+- Hugging Face
 
-## Deploy on Vercel
+## Machine Learning Pipeline
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Data Collection
+2. Data Preprocessing
+3. Feature Engineering
+4. Lag Feature Generation
+5. Growth Rate Calculation
+6. XGBoost Training
+7. LightGBM Training
+8. Hybrid Prediction Generation
+9. Z-Score Outbreak Classification
+10. Visualization and Alert Generation
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Dataset
+
+The model was trained using the Infectious Disease 2001–2014 dataset obtained from Kaggle.
+
+Main features include:
+
+- Disease
+- County
+- Year
+- Count
+- Rate
+
+Additional engineered features:
+
+- Lag Features
+- Growth Rate
+- Temporal Features
+
+## Model Performance
+
+| Model | MSE | RMSE | MAE | R² |
+|---------|---------|---------|---------|---------|
+| XGBoost | 1507.29 | 38.82 | 4.18 | 0.7724 |
+| LightGBM | 719.76 | 26.83 | 3.13 | 0.8913 |
+| Hybrid Model | 932.17 | 30.53 | 3.50 | 0.8592 |
+
+## System Architecture
+
+The platform consists of:
+
+- Frontend Layer (Next.js)
+- Backend Layer (FastAPI)
+- Database Layer (Supabase/PostgreSQL)
+- Machine Learning Service
+- OpenAI Multi-Agent Chatbot
+- Outbreak Detection Module
+
+## Authors
+
+Graduation Project – Department of Information Technology Engineering
+
+## License
+
+Academic Project
