@@ -180,10 +180,17 @@ The screenshots below highlight the core components of the HealthSight platform,
 <img width="1918" height="1020" alt="Screenshot 2026-04-12 224617" src="https://github.com/user-attachments/assets/5c3588ab-47e4-49bf-a47b-9003b6a575ce" />
 
 ---
+## Project Team
 
-## Authors
+**Students**
+- Reem Farouq
+- Zainab Luay
 
-Graduation Project
+**Supervisor**
+- Dr. Hiba Mohammed Fadhil
 
-Department of Information Technology Engineering
+**Department**
+Information Technology Engineering
+
+**Academic Year**
 2025–2026
