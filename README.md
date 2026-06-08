@@ -168,11 +168,22 @@ The platform consists of:
 This project supports the United Nations Sustainable Development Goal 3 by improving disease monitoring, outbreak prediction, and access to healthcare information through AI-powered technologies.
 
 ---
+## System Screenshots
+
+The screenshots below highlight the core components of the HealthSight platform, including database design, administrative dashboards, outbreak visualization, analytics interfaces, and FastAPI-powered backend services.
+
+<img width="1538" height="792" alt="t1" src="https://github.com/user-attachments/assets/c918c597-ea6f-47c4-af22-d65c9906e4b4" />
+<img width="1912" height="916" alt="Screenshot 2026-04-12 225116" src="https://github.com/user-attachments/assets/f02e377b-345b-46d0-80ad-d49b06a2949c" />
+<img width="1916" height="962" alt="Screenshot 2026-04-12 225131" src="https://github.com/user-attachments/assets/78fbd88b-25b1-472b-afe8-c80dc0cf14fb" />
+<img width="1721" height="867" alt="Screenshot 2026-04-12 225153" src="https://github.com/user-attachments/assets/27c79398-3ee4-4f04-ac64-c9352f600de9" />
+<img width="1641" height="893" alt="Screenshot 2026-04-12 225208" src="https://github.com/user-attachments/assets/8be1fa7d-dc70-4a46-a636-7ff81381ec60" />
+<img width="1918" height="1020" alt="Screenshot 2026-04-12 224617" src="https://github.com/user-attachments/assets/5c3588ab-47e4-49bf-a47b-9003b6a575ce" />
+
+---
 
 ## Authors
 
 Graduation Project
 
 Department of Information Technology Engineering
-
 2025–2026
